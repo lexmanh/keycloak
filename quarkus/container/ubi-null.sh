@@ -44,7 +44,14 @@ dnf install -y findutils diffutils
 # Install core packages to chroot
 rootfs="$(realpath rootfs)"
 mkdir -p "$rootfs"
+
+# register the Red Hat Developer subscription
+# subscription-manager register --username lxm4nh --password "c4taAQL3&xeWC" --force
+# dnf install -y --installroot "$rootfs" --releasever 9 --setopt install_weak_deps=false --nodocs
+
 <keep xargs dnf install -y --installroot "$rootfs" --releasever 9 --setopt install_weak_deps=false --nodocs
+
+
 dnf --installroot "$rootfs" clean all
 rm -rf "$rootfs"/var/cache/* "$rootfs"/var/log/dnf* "$rootfs"/var/log/yum.*
 { set +x; } 2>/dev/null

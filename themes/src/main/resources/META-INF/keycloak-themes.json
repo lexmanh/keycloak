@@ -1,15 +1,20 @@
 {
-    "themes": [{
-        "name" : "base",
-        "types": [ "admin", "account", "login", "email" ]
-    }, {
-        "name" : "keycloak",
-        "types": [ "login", "common", "email", "welcome" ]
-    }, {
-        "name" : "keycloak.v2",
-        "types": [ "account", "admin" ]
-    }, {
-        "name" : "loctroi",
-        "types": [ "login", "common", "email", "welcome" ]
-    }]
+  "themes": [
+    {
+      "name": "base",
+      "types": ["admin", "account", "login", "email"]
+    },
+    {
+      "name": "keycloak",
+      "types": ["login", "common", "email", "welcome"]
+    },
+    {
+      "name": "keycloak.v2",
+      "types": ["account", "admin"]
+    },
+    {
+      "name": "farmerp",
+      "types": ["admin", "account", "login", "welcome"]
+    }
+  ]
 }

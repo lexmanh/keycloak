@@ -21,7 +21,6 @@ RUN bash /tmp/ubi-null.sh java-17-openjdk-headless glibc-langpack-en findutils
 
 FROM registry.access.redhat.com/ubi9-micro
 ENV LANG en_US.UTF-8
-
 COPY --from=ubi-micro-build /tmp/null/rootfs/ /
 COPY --from=ubi-micro-build --chown=1000:0 /opt/keycloak /opt/keycloak
 
