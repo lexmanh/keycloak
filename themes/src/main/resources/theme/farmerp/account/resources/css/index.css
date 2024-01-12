@@ -1,0 +1,5 @@
+/* Change the background color of the header */
+header.pf-c-page__header,
+div.pf-c-page__sidebar {
+    background-color: #172f17 !important;
+}
