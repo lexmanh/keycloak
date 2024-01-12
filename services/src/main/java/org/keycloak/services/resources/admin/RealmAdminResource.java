@@ -57,7 +57,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import org.jboss.logging.Logger;
-import org.jboss.resteasy.annotations.cache.NoCache;
+import org.jboss.resteasy.reactive.NoCache;
 import org.keycloak.Config;
 import org.keycloak.KeyPairVerifier;
 import org.keycloak.authentication.CredentialRegistrator;
@@ -385,12 +385,6 @@ public class RealmAdminResource {
 
             if (auth.users().canView()) {
                 rep.setRegistrationEmailAsUsername(realm.isRegistrationEmailAsUsername());
-                if (realm.getAttribute(DeclarativeUserProfileProvider.REALM_USER_PROFILE_ENABLED, Boolean.FALSE)) {
-                    // add the user profile attribute if enabled
-                    Map<String, String> attrs = Optional.ofNullable(rep.getAttributes()).orElse(new HashMap<>());
-                    attrs.put(DeclarativeUserProfileProvider.REALM_USER_PROFILE_ENABLED, Boolean.TRUE.toString());
-                    rep.setAttributes(attrs);
-                }
             }
 
             if (auth.realm().canViewIdentityProviders()) {
