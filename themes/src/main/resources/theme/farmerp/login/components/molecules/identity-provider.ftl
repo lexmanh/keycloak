@@ -69,8 +69,11 @@
         type="button"
       >
         <#if providerIcons[provider.alias]??>
-          <div class="h-6 w-6">
-            <@providerIcons[provider.alias] />
+          <div style="display: flex;align-items: center; gap: 0.567rem;">
+            <div>${provider.displayName!}</div>
+            <div style="width:21px;height:21px;">
+              <@providerIcons[provider.alias] />
+            </div>
           </div>
         <#else>
           ${provider.displayName!}
