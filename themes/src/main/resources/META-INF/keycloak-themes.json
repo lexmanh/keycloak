@@ -14,7 +14,7 @@
     },
     {
       "name": "farmerp",
-      "types": ["account", "login", "admin", "welcome"]
+      "types": ["account", "login", "admin", "welcome", "email"]
     }
   ]
 }
