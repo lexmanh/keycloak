@@ -1,13 +1,11 @@
 import type ComponentRepresentation from "@keycloak/keycloak-admin-client/lib/defs/componentRepresentation";
 import type { KeyMetadataRepresentation } from "@keycloak/keycloak-admin-client/lib/defs/keyMetadataRepresentation";
+import { Button, ButtonVariant, PageSection } from "@patternfly/react-core";
 import {
-  Button,
-  ButtonVariant,
-  PageSection,
   Select,
   SelectOption,
   SelectVariant,
-} from "@patternfly/react-core";
+} from "@patternfly/react-core/deprecated";
 import { FilterIcon } from "@patternfly/react-icons";
 import { cellWidth } from "@patternfly/react-table";
 import { useState } from "react";
@@ -67,6 +65,7 @@ const SelectFilter = ({ onFilter }: SelectFilterProps) => {
         toggleFilter();
       }}
       selections={filterType}
+      aria-label={t("selectFilterType")}
     >
       {FILTER_OPTIONS.map((option) => (
         <SelectOption
@@ -233,6 +232,19 @@ export const KeysListTab = ({ realmComponents }: KeysListTabProps) => {
                       {t("certificate")}
                     </Button>
                   </div>
+                );
+              } else if (type === "OKP") {
+                return (
+                  <Button
+                    onClick={() => {
+                      togglePublicKeyDialog();
+                      setPublicKey(publicKey!);
+                    }}
+                    variant="secondary"
+                    id="kc-public-key"
+                  >
+                    {t("publicKeys").slice(0, -1)}
+                  </Button>
                 );
               } else return "";
             },

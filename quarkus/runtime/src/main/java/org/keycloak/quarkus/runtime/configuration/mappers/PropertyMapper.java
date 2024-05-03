@@ -24,15 +24,14 @@ import static org.keycloak.quarkus.runtime.configuration.Configuration.toCliForm
 import static org.keycloak.quarkus.runtime.configuration.Configuration.toEnvVarFormat;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.BooleanSupplier;
 
 import io.smallrye.config.ConfigSourceInterceptorContext;
 import io.smallrye.config.ConfigValue;
 
-import org.jboss.logging.Logger;
 import org.keycloak.config.DeprecatedMetadata;
 import org.keycloak.config.Option;
 import org.keycloak.config.OptionBuilder;
@@ -40,14 +39,19 @@ import org.keycloak.config.OptionCategory;
 import org.keycloak.quarkus.runtime.cli.PropertyException;
 import org.keycloak.quarkus.runtime.cli.PropertyMapperParameterConsumer;
 import org.keycloak.quarkus.runtime.configuration.ConfigArgsConfigSource;
+import org.keycloak.quarkus.runtime.configuration.KcEnvConfigSource;
+import org.keycloak.quarkus.runtime.configuration.KeycloakConfigSourceProvider;
 import org.keycloak.quarkus.runtime.Environment;
 import org.keycloak.quarkus.runtime.configuration.MicroProfileConfigProvider;
+import org.keycloak.utils.StringUtil;
 
 public class PropertyMapper<T> {
 
-    static PropertyMapper IDENTITY = new PropertyMapper(
-            new OptionBuilder<String>(null, String.class).build(),
+    static PropertyMapper<?> IDENTITY = new PropertyMapper<>(
+            new OptionBuilder<>(null, String.class).build(),
             null,
+            () -> false,
+            "",
             null,
             null,
             null,
@@ -61,20 +65,23 @@ public class PropertyMapper<T> {
 
     private final Option<T> option;
     private final String to;
+    private BooleanSupplier enabled;
+    private String enabledWhen;
     private final BiFunction<Optional<String>, ConfigSourceInterceptorContext, Optional<String>> mapper;
     private final String mapFrom;
     private final boolean mask;
     private final String paramLabel;
     private final String envVarFormat;
-    private String cliFormat;
-    private BiConsumer<PropertyMapper<T>, ConfigValue> validator;
+    private final String cliFormat;
+    private final BiConsumer<PropertyMapper<T>, ConfigValue> validator;
 
-    private static final Logger logger = Logger.getLogger(PropertyMapper.class);
-
-    PropertyMapper(Option<T> option, String to, BiFunction<Optional<String>, ConfigSourceInterceptorContext, Optional<String>> mapper,
+    PropertyMapper(Option<T> option, String to, BooleanSupplier enabled, String enabledWhen,
+                   BiFunction<Optional<String>, ConfigSourceInterceptorContext, Optional<String>> mapper,
                    String mapFrom, String paramLabel, boolean mask, BiConsumer<PropertyMapper<T>, ConfigValue> validator) {
         this.option = option;
         this.to = to == null ? getFrom() : to;
+        this.enabled = enabled;
+        this.enabledWhen = enabledWhen;
         this.mapper = mapper == null ? PropertyMapper::defaultTransformer : mapper;
         this.mapFrom = mapFrom;
         this.paramLabel = paramLabel;
@@ -108,7 +115,7 @@ public class PropertyMapper<T> {
         // try to obtain the value for the property we want to map first
         ConfigValue config = convertValue(context.proceed(from));
 
-        if (config == null) {
+        if (config == null || config.getValue() == null) {
             if (mapFrom != null) {
                 // if the property we want to map depends on another one, we use the value from the other property to call the mapper
                 String parentKey = MicroProfileConfigProvider.NS_KEYCLOAK_PREFIX + mapFrom;
@@ -116,17 +123,17 @@ public class PropertyMapper<T> {
 
                 if (parentValue == null) {
                     // parent value not explicitly set, try to resolve the default value set to the parent property
-                    PropertyMapper parentMapper = PropertyMappers.getMapper(parentKey);
+                    PropertyMapper<?> parentMapper = PropertyMappers.getMapper(parentKey);
 
                     if (parentMapper != null && parentMapper.getDefaultValue().isPresent()) {
-                        parentValue = ConfigValue.builder().withValue(parentMapper.getDefaultValue().get().toString()).build();
+                        parentValue = ConfigValue.builder().withValue(Option.getDefaultValueString(parentMapper.getDefaultValue().get())).build();
                     }
                 }
 
                 return transformValue(name, ofNullable(parentValue == null ? null : parentValue.getValue()), context, null);
             }
 
-            ConfigValue defaultValue = transformValue(name, this.option.getDefaultValue().map(Objects::toString), context, null);
+            ConfigValue defaultValue = transformValue(name, this.option.getDefaultValue().map(Option::getDefaultValueString), context, null);
 
             if (defaultValue != null) {
                 return defaultValue;
@@ -152,15 +159,39 @@ public class PropertyMapper<T> {
         return transformedValue;
     }
 
-    public Option<T> getOption() { return this.option; }
+    public Option<T> getOption() {
+        return this.option;
+    }
 
-    public Class<T> getType() { return this.option.getType(); }
+    public void setEnabled(BooleanSupplier enabled) {
+        this.enabled = enabled;
+    }
+
+    public boolean isEnabled() {
+        return enabled.getAsBoolean();
+    }
+
+    public Optional<String> getEnabledWhen() {
+        return Optional.of(enabledWhen)
+                .filter(StringUtil::isNotBlank)
+                .map(e -> "Available only when " + e);
+    }
+
+    public void setEnabledWhen(String enabledWhen) {
+        this.enabledWhen = enabledWhen;
+    }
+
+    public Class<T> getType() {
+        return this.option.getType();
+    }
 
     public String getFrom() {
         return MicroProfileConfigProvider.NS_KEYCLOAK_PREFIX + this.option.getKey();
     }
 
-    public String getDescription() { return this.option.getDescription(); }
+    public String getDescription() {
+        return this.option.getDescription();
+    }
 
     public List<String> getExpectedValues() {
         return this.option.getExpectedValues();
@@ -213,7 +244,11 @@ public class PropertyMapper<T> {
 
         if (mapper == null || (mapFrom == null && name.equals(getFrom()))) {
             // no mapper set or requesting a property that does not depend on other property, just return the value from the config source
-            return ConfigValue.builder().withName(name).withValue(value.orElse(null)).withConfigSourceName(configSourceName).build();
+            return ConfigValue.builder()
+                    .withName(name)
+                    .withValue(value.orElse(null))
+                    .withConfigSourceName(configSourceName)
+                    .build();
         }
 
         Optional<String> mappedValue = mapper.apply(value, context);
@@ -222,8 +257,12 @@ public class PropertyMapper<T> {
             return null;
         }
 
-        return ConfigValue.builder().withName(name).withValue(mappedValue.get()).withRawValue(value.orElse(null))
-                .withConfigSourceName(configSourceName).build();
+        return ConfigValue.builder()
+                .withName(name)
+                .withValue(mappedValue.get())
+                .withRawValue(value.orElse(null))
+                .withConfigSourceName(configSourceName)
+                .build();
     }
 
     private ConfigValue convertValue(ConfigValue configValue) {
@@ -241,8 +280,10 @@ public class PropertyMapper<T> {
         private BiFunction<Optional<String>, ConfigSourceInterceptorContext, Optional<String>> mapper;
         private String mapFrom = null;
         private boolean isMasked = false;
+        private BooleanSupplier isEnabled = () -> true;
+        private String enabledWhen = "";
         private String paramLabel;
-        private BiConsumer<PropertyMapper<T>, ConfigValue> validator = (mapper, value) -> mapper.validateExpectedValues(value);
+        private BiConsumer<PropertyMapper<T>, ConfigValue> validator = (mapper, value) -> mapper.validateExpectedValues(value, mapper::validateSingleValue);
 
         public Builder(Option<T> option) {
             this.option = option;
@@ -273,6 +314,17 @@ public class PropertyMapper<T> {
             return this;
         }
 
+        public Builder<T> isEnabled(BooleanSupplier isEnabled, String enabledWhen) {
+            this.isEnabled = isEnabled;
+            this.enabledWhen=enabledWhen;
+            return this;
+        }
+
+        public Builder<T> isEnabled(BooleanSupplier isEnabled) {
+            this.isEnabled = isEnabled;
+            return this;
+        }
+
         public Builder<T> validator(BiConsumer<PropertyMapper<T>, ConfigValue> validator) {
             this.validator = validator;
             return this;
@@ -282,7 +334,7 @@ public class PropertyMapper<T> {
             if (paramLabel == null && Boolean.class.equals(option.getType())) {
                 paramLabel = Boolean.TRUE + "|" + Boolean.FALSE;
             }
-            return new PropertyMapper<T>(option, to, mapper, mapFrom, paramLabel, isMasked, validator);
+            return new PropertyMapper<T>(option, to, isEnabled, enabledWhen, mapper, mapFrom, paramLabel, isMasked, validator);
         }
     }
 
@@ -296,15 +348,47 @@ public class PropertyMapper<T> {
         }
     }
 
-    public void validateExpectedValues(ConfigValue value) {
-        if (PropertyMapperParameterConsumer.isExpectedValue(getExpectedValues(), value.getValue())) {
-            return;
+    public void validateExpectedValues(ConfigValue configValue, BiConsumer<ConfigValue, String> singleValidator) {
+        String value = configValue.getValue();
+
+        boolean multiValued = getOption().getType() == java.util.List.class;
+
+        String[] values = multiValued ? value.split(",") : new String[] { value };
+        for (String v : values) {
+            if (multiValued && !v.trim().equals(v)) {
+                throw new PropertyException("Invalid value for multivalued option " + getOptionAndSourceMessage(configValue)
+                        + ": list value '" + v + "' should not have leading nor trailing whitespace");
+            }
+            singleValidator.accept(configValue, v);
         }
-        boolean cli = Optional.ofNullable(value.getConfigSourceName()).filter(name -> name.contains(ConfigArgsConfigSource.NAME)).isPresent();
-        throw new PropertyException(
-                PropertyMapperParameterConsumer.getErrorMessage(cli ? this.getCliFormat() : getFrom(),
-                        value.getValue(), getExpectedValues(), getExpectedValues())
-                        + (cli ? "" : ". From ConfigSource " + value.getConfigSourceName()));
+    }
+
+    public static boolean isCliOption(ConfigValue configValue) {
+        return Optional.ofNullable(configValue.getConfigSourceName()).filter(name -> name.contains(ConfigArgsConfigSource.NAME)).isPresent();
+    }
+
+    public static boolean isEnvOption(ConfigValue configValue) {
+        return Optional.ofNullable(configValue.getConfigSourceName()).filter(name -> name.contains(KcEnvConfigSource.NAME)).isPresent();
+    }
+
+    void validateSingleValue(ConfigValue configValue, String v) {
+        List<String> expectedValues = getExpectedValues();
+        if (!expectedValues.isEmpty() && !expectedValues.contains(v)) {
+            throw new PropertyException(
+                    String.format("Invalid value for option %s: %s.%s", getOptionAndSourceMessage(configValue), v,
+                            PropertyMapperParameterConsumer.getExpectedValuesMessage(expectedValues, expectedValues)));
+        }
+    }
+
+    String getOptionAndSourceMessage(ConfigValue configValue) {
+        if (isCliOption(configValue)) {
+            return String.format("'%s'", this.getCliFormat());
+        }
+        if (isEnvOption(configValue)) {
+            return String.format("'%s'", this.getEnvVarFormat());
+        }
+        return String.format("'%s' in %s", getFrom(),
+                KeycloakConfigSourceProvider.getConfigSourceDisplayName(configValue.getConfigSourceName()));
     }
 
 }

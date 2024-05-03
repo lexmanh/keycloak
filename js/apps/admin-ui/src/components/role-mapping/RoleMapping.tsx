@@ -144,6 +144,10 @@ export const RoleMapping = ({
     messageKey: t("removeMappingConfirm", { count: selected.length }),
     continueButtonLabel: "remove",
     continueButtonVariant: ButtonVariant.danger,
+    onCancel: () => {
+      setSelected([]);
+      refresh();
+    },
     onConfirm: async () => {
       try {
         await Promise.all(deleteMapping(type, id, selected));
@@ -186,7 +190,7 @@ export const RoleMapping = ({
                 id="hideInheritedRoles"
                 data-testid="hideInheritedRoles"
                 isChecked={hide}
-                onChange={(check) => {
+                onChange={(_event, check) => {
                   setHide(check);
                   refresh();
                 }}
@@ -254,6 +258,15 @@ export const RoleMapping = ({
             instructions={t(`noRolesInstructions-${type}`)}
             primaryActionText={t("assignRole")}
             onPrimaryAction={() => setShowAssign(true)}
+            secondaryActions={[
+              {
+                text: t("showInheritedRoles"),
+                onClick: () => {
+                  setHide(false);
+                  refresh();
+                },
+              },
+            ]}
           />
         }
       />

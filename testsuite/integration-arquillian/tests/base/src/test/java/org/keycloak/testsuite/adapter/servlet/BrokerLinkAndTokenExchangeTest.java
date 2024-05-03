@@ -105,10 +105,6 @@ import static org.keycloak.testsuite.admin.ApiUtil.createUserAndResetPasswordWit
  * @version $Revision: 1 $
  */
 @AppServerContainer(ContainerConstants.APP_SERVER_UNDERTOW)
-@AppServerContainer(ContainerConstants.APP_SERVER_WILDFLY)
-@AppServerContainer(ContainerConstants.APP_SERVER_EAP)
-@AppServerContainer(ContainerConstants.APP_SERVER_EAP6)
-@AppServerContainer(ContainerConstants.APP_SERVER_EAP71)
 @EnableFeature(value = Profile.Feature.TOKEN_EXCHANGE, skipRestart = true)
 @EnableFeature(value = Profile.Feature.ADMIN_FINE_GRAINED_AUTHZ, skipRestart = true)
 public class BrokerLinkAndTokenExchangeTest extends AbstractServletsAdapterTest {
@@ -219,7 +215,7 @@ public class BrokerLinkAndTokenExchangeTest extends AbstractServletsAdapterTest 
     @DisableFeature(value = Profile.Feature.TOKEN_EXCHANGE, skipRestart = true)
     @UncaughtServerErrorExpected
     public void testFeatureDisabled() throws Exception {
-        checkFeature(Response.Status.NOT_IMPLEMENTED.getStatusCode());
+        checkFeature(Response.Status.BAD_REQUEST.getStatusCode());
     }
 
     @Test
@@ -863,7 +859,7 @@ public class BrokerLinkAndTokenExchangeTest extends AbstractServletsAdapterTest 
     private void checkFeature(int statusCode) throws Exception {
         String accessToken = oauth.doGrantAccessTokenRequest(PARENT_IDP, PARENT2_USERNAME, "password", null, PARENT_CLIENT, "password").getAccessToken();
 
-        if (statusCode != Response.Status.NOT_IMPLEMENTED.getStatusCode()) {
+        if (statusCode != Response.Status.BAD_REQUEST.getStatusCode()) {
             Assert.assertEquals(0, adminClient.realm(CHILD_IDP).getClientSessionStats().size());
         }
 
@@ -888,7 +884,7 @@ public class BrokerLinkAndTokenExchangeTest extends AbstractServletsAdapterTest 
                         ));
                 Assert.assertEquals(statusCode, response.getStatus());
 
-                if (statusCode != Response.Status.NOT_IMPLEMENTED.getStatusCode()) {
+                if (statusCode != Response.Status.BAD_REQUEST.getStatusCode()) {
                     AccessTokenResponse tokenResponse = response.readEntity(AccessTokenResponse.class);
                     String idToken = tokenResponse.getIdToken();
                     Assert.assertNotNull(idToken);

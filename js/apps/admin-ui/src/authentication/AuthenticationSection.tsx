@@ -57,6 +57,7 @@ export const REALM_FLOWS = new Map<string, string>([
   ["resetCredentialsFlow", "reset credentials"],
   ["clientAuthenticationFlow", "clients"],
   ["dockerAuthenticationFlow", "docker auth"],
+  ["firstBrokerLoginFlow", "firstBrokerLogin"],
 ]);
 
 const AliasRenderer = ({ id, alias, usedBy, builtIn }: AuthenticationType) => {
@@ -184,7 +185,7 @@ export default function AuthenticationSection() {
         helpUrl={helpUrls.authenticationUrl}
         divider={false}
       />
-      <PageSection variant="light" className="pf-u-p-0">
+      <PageSection variant="light" className="pf-v5-u-p-0">
         <RoutableTabs
           isBox
           defaultLocation={toAuthentication({ realm: realmName, tab: "flows" })}

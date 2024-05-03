@@ -18,7 +18,9 @@
 package org.keycloak.models.cache.infinispan;
 
 import org.jboss.logging.Logger;
+import org.keycloak.client.clienttype.ClientTypeManager;
 import org.keycloak.cluster.ClusterProvider;
+import org.keycloak.common.Profile;
 import org.keycloak.component.ComponentModel;
 import org.keycloak.models.*;
 import org.keycloak.models.cache.CacheRealmProvider;
@@ -27,11 +29,12 @@ import org.keycloak.models.cache.infinispan.entities.*;
 import org.keycloak.models.cache.infinispan.events.*;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.storage.DatastoreProvider;
-import org.keycloak.storage.LegacyStoreManagers;
+import org.keycloak.storage.StoreManagers;
 import org.keycloak.storage.StorageId;
 import org.keycloak.storage.client.ClientStorageProviderModel;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -121,13 +124,13 @@ public class RealmCacheSession implements CacheRealmProvider {
 
     protected boolean clearAll;
     protected final long startupRevision;
-    private final LegacyStoreManagers datastoreProvider;
+    private final StoreManagers datastoreProvider;
 
     public RealmCacheSession(RealmCacheManager cache, KeycloakSession session) {
         this.cache = cache;
         this.session = session;
         this.startupRevision = cache.getCurrentCounter();
-        this.datastoreProvider = (LegacyStoreManagers) session.getProvider(DatastoreProvider.class);
+        this.datastoreProvider = (StoreManagers) session.getProvider(DatastoreProvider.class);
         session.getTransactionManager().enlistPrepare(getPrepareTransaction());
         session.getTransactionManager().enlistAfterCompletion(getAfterTransaction());
     }
@@ -1016,40 +1019,63 @@ public class RealmCacheSession implements CacheRealmProvider {
 
     @Override
     public Stream<GroupModel> getTopLevelGroupsStream(RealmModel realm, String search, Boolean exact, Integer first, Integer max) {
-        String cacheKey = getTopGroupsQueryCacheKey(realm.getId() + search + first + max);
-        boolean queryDB = invalidations.contains(cacheKey) || listInvalidations.contains(cacheKey)
-            || listInvalidations.contains(realm.getId());
-        if (queryDB) {
+        String cacheKey = getTopGroupsQueryCacheKey(realm.getId());
+
+        if (hasInvalidation(realm, cacheKey)) {
             return getGroupDelegate().getTopLevelGroupsStream(realm, search, exact, first, max);
         }
 
         GroupListQuery query = cache.get(cacheKey, GroupListQuery.class);
-        if (Objects.nonNull(query)) {
-            logger.tracev("getTopLevelGroups cache hit: {0}", realm.getName());
-        }
+        String searchKey = Optional.ofNullable(search).orElse("") + "." + Optional.ofNullable(first).orElse(-1) + "." + Optional.ofNullable(max).orElse(-1);
+        Set<String> cached;
 
         if (Objects.isNull(query)) {
+            // not cached yet
             Long loaded = cache.getCurrentRevision(cacheKey);
-            List<GroupModel> model = getGroupDelegate().getTopLevelGroupsStream(realm, search, exact, first, max).collect(Collectors.toList());
-            if (model.isEmpty()) return Stream.empty();
-            Set<String> ids = new HashSet<>();
-            for (GroupModel client : model) ids.add(client.getId());
-            query = new GroupListQuery(loaded, cacheKey, realm, ids);
+            cached = getGroupDelegate().getTopLevelGroupsStream(realm, search, exact, first, max).map(GroupModel::getId).collect(Collectors.toSet());
+            query = new GroupListQuery(loaded, cacheKey, realm, searchKey, cached);
             logger.tracev("adding realm getTopLevelGroups cache miss: realm {0} key {1}", realm.getName(), cacheKey);
             cache.addRevisioned(query, startupRevision);
-            return model.stream();
-        }
-        List<GroupModel> list = new LinkedList<>();
-        for (String id : query.getGroups()) {
-            GroupModel group = session.groups().getGroupById(realm, id);
-            if (Objects.isNull(group)) {
-                invalidations.add(cacheKey);
-                return getGroupDelegate().getTopLevelGroupsStream(realm);
+        } else {
+            logger.tracev("getTopLevelGroups cache hit: {0}", realm.getName());
+
+            cached = query.getGroups(searchKey);
+
+            if (hasInvalidation(realm, cacheKey) || cached == null) {
+                // there is a cache entry, but the current search is not yet cached
+                cache.invalidateObject(cacheKey);
+                Long loaded = cache.getCurrentRevision(cacheKey);
+                cached = getGroupDelegate().getTopLevelGroupsStream(realm, search, exact, first, max).map(GroupModel::getId).collect(Collectors.toSet());
+                query = new GroupListQuery(loaded, cacheKey, realm, searchKey, cached, query);
+                logger.tracev("adding realm getTopLevelGroups search cache miss: realm {0} key {1}", realm.getName(), searchKey);
+                cache.addRevisioned(query, cache.getCurrentCounter());
             }
-            list.add(group);
         }
 
-        return list.stream().sorted(GroupModel.COMPARE_BY_NAME);
+        AtomicBoolean invalidate = new AtomicBoolean(false);
+        Stream<GroupModel> groups = cached.stream()
+                .map((id) -> session.groups().getGroupById(realm, id))
+                .takeWhile(group -> {
+                    if (Objects.isNull(group)) {
+                        invalidate.set(true);
+                        return false;
+                    }
+                    return true;
+                })
+                .sorted(GroupModel.COMPARE_BY_NAME);
+
+        if (!invalidate.get()) {
+            return groups;
+        }
+
+        invalidations.add(cacheKey);
+
+        return getGroupDelegate().getTopLevelGroupsStream(realm, search, exact, first, max);
+    }
+
+    private boolean hasInvalidation(RealmModel realm, String cacheKey) {
+        return invalidations.contains(cacheKey) || listInvalidations.contains(cacheKey)
+                || listInvalidations.contains(realm.getId());
     }
 
     @Override
@@ -1171,7 +1197,7 @@ public class RealmCacheSession implements CacheRealmProvider {
         if (invalidations.contains(delegate.getId())) return delegate;
         StorageId storageId = new StorageId(delegate.getId());
         CachedClient cached = null;
-        ClientAdapter adapter = null;
+        ClientModel adapter = null;
 
         if (!storageId.isLocal()) {
             ComponentModel component = realm.getComponent(storageId.getProviderId());
@@ -1185,7 +1211,7 @@ public class RealmCacheSession implements CacheRealmProvider {
             }
 
             cached = new CachedClient(revision, realm, delegate);
-            adapter = new ClientAdapter(realm, cached, this);
+            adapter = toClientModel(realm, cached);
 
             long lifespan = model.getLifespan();
             if (lifespan > 0) {
@@ -1195,7 +1221,7 @@ public class RealmCacheSession implements CacheRealmProvider {
             }
         } else {
             cached = new CachedClient(revision, realm, delegate);
-            adapter = new ClientAdapter(realm, cached, this);
+            adapter = toClientModel(realm, cached);
             cache.addRevisioned(cached, startupRevision);
         }
 
@@ -1223,9 +1249,17 @@ public class RealmCacheSession implements CacheRealmProvider {
                 return getClientDelegate().getClientById(realm, cached.getId());
             }
         }
-        ClientAdapter adapter = new ClientAdapter(realm, cached, this);
+        return toClientModel(realm, cached);
+    }
 
-        return adapter;
+    private ClientModel toClientModel(RealmModel realm, CachedClient cached) {
+        ClientAdapter client = new ClientAdapter(realm, cached, this);
+
+        if (Profile.isFeatureEnabled(Profile.Feature.CLIENT_TYPES)) {
+            ClientTypeManager mgr = session.getProvider(ClientTypeManager.class);
+            return mgr.augmentClient(client);
+        }
+        return client;
     }
 
     @Override

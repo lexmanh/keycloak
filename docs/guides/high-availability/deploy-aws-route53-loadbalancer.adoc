@@ -4,11 +4,9 @@
 <@tmpl.guide
 title="Deploy an AWS Route 53 loadbalancer"
 summary="Building block for a loadbalancer"
-preview="true"
-previewDiscussionLink="https://github.com/keycloak/keycloak/discussions/25269"
 tileVisible="false" >
 
-This topic describes the procedure required to configure DNS based failover for Multi-AZ {project_name} clusters using AWS Route53 for an active/passive setup. These instructions are intended for used with the setup described in the <@links.ha id="concepts-active-passive-sync"/> {section}.
+This topic describes the procedure required to configure DNS based failover for Multi-AZ {project_name} clusters using AWS Route53 for an active/passive setup. These instructions are intended to be used with the setup described in the <@links.ha id="concepts-active-passive-sync"/> {section}.
 Use it together with the other building blocks outlined in the <@links.ha id="bblocks-active-passive-sync"/> {section}.
 
 include::partials/blueprint-disclaimer.adoc[]
@@ -22,7 +20,7 @@ If the primary site fails, the DNS changes will need to propagate to the clients
 Depending on the client's settings, the propagation may take some minutes based on the client's configuration.
 When using mobile connections, some internet providers might not respect the TTL of the DNS entries, which can lead to an extended time before the clients can connect to the new site.
 
-.AWS Global Accelerator Failover
+.AWS Route53 Failover
 image::high-availability/route53-multi-az-failover.svg[]
 
 Two Openshift Routes are exposed on both the Primary and Backup ROSA cluster.
@@ -219,13 +217,13 @@ For both the Primary and Backup cluster, perform the following steps:
 +
 .. Log in to the ROSA cluster
 +
-.. Ensure the {project_name} CR has the following configuration
+.. Ensure the `Keycloak` CR has the following configuration
 +
 [source,yaml]
 ----
 <#noparse>
 apiVersion: k8s.keycloak.org/v2alpha1
-kind: {project_name}
+kind: Keycloak
 metadata:
   name: keycloak
 spec:

@@ -2,12 +2,14 @@ import {
   AlertVariant,
   Button,
   ButtonVariant,
-  Dropdown,
-  DropdownItem,
-  KebabToggle,
   PageSection,
   ToolbarItem,
 } from "@patternfly/react-core";
+import {
+  Dropdown,
+  DropdownItem,
+  KebabToggle,
+} from "@patternfly/react-core/deprecated";
 import { cellWidth } from "@patternfly/react-table";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -157,22 +159,28 @@ export default function ClientScopesSection() {
     continueButtonLabel: "delete",
     continueButtonVariant: ButtonVariant.danger,
     onConfirm: async () => {
-      try {
-        for (const scope of selectedScopes) {
-          try {
-            await removeScope(scope);
-          } catch (error: any) {
-            console.warn(
-              "could not remove scope",
-              error.response?.data?.errorMessage || error,
-            );
+      const clientScopes = await adminClient.clientScopes.find();
+      const clientScopeLength = Object.keys(clientScopes).length;
+      if (clientScopeLength - selectedScopes.length > 0) {
+        try {
+          for (const scope of selectedScopes) {
+            try {
+              await removeScope(scope);
+            } catch (error: any) {
+              console.warn(
+                "could not remove scope",
+                error.response?.data?.errorMessage || error,
+              );
+            }
+            await adminClient.clientScopes.del({ id: scope.id! });
           }
-          await adminClient.clientScopes.del({ id: scope.id! });
+          addAlert(t("deletedSuccessClientScope"), AlertVariant.success);
+          refresh();
+        } catch (error) {
+          addError("deleteErrorClientScope", error);
         }
-        addAlert(t("deletedSuccessClientScope"), AlertVariant.success);
-        refresh();
-      } catch (error) {
-        addError("deleteErrorClientScope", error);
+      } else {
+        addError(t("notAllowedToDeleteAllClientScopes"), "error");
       }
     },
   });
@@ -185,7 +193,7 @@ export default function ClientScopesSection() {
         subKey="clientScopeExplain"
         helpUrl={helpUrls.clientScopesUrl}
       />
-      <PageSection variant="light" className="pf-u-p-0">
+      <PageSection variant="light" className="pf-v5-u-p-0">
         <KeycloakDataTable
           key={key}
           loader={loader}
@@ -245,7 +253,11 @@ export default function ClientScopesSection() {
               </ToolbarItem>
               <ToolbarItem>
                 <Dropdown
-                  toggle={<KebabToggle onToggle={setKebabOpen} />}
+                  toggle={
+                    <KebabToggle
+                      onToggle={(_event, val) => setKebabOpen(val)}
+                    />
+                  }
                   isOpen={kebabOpen}
                   isPlain
                   dropdownItems={[

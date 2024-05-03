@@ -2,14 +2,16 @@ import type RealmRepresentation from "@keycloak/keycloak-admin-client/lib/defs/r
 import {
   AlertVariant,
   ButtonVariant,
-  DropdownItem,
-  DropdownSeparator,
   PageSection,
   Tab,
   TabTitleText,
   Tooltip,
 } from "@patternfly/react-core";
-import { useEffect, useState } from "react";
+import {
+  DropdownItem,
+  DropdownSeparator,
+} from "@patternfly/react-core/deprecated";
+import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -53,6 +55,7 @@ import { ClientPoliciesTab, toClientPolicies } from "./routes/ClientPolicies";
 import { RealmSettingsTab, toRealmSettings } from "./routes/RealmSettings";
 import { SecurityDefenses } from "./security-defences/SecurityDefenses";
 import { UserProfileTab } from "./user-profile/UserProfileTab";
+import { DEFAULT_LOCALE } from "../i18n/i18n";
 
 export interface UIRealmRepresentation extends RealmRepresentation {
   upConfig?: UserProfileConfig;
@@ -174,6 +177,7 @@ const RealmSettingsHeader = ({
 type RealmSettingsTabsProps = {
   realm: UIRealmRepresentation;
   refresh: () => void;
+  tableData?: Record<string, string>[];
 };
 
 export const RealmSettingsTabs = ({
@@ -186,6 +190,9 @@ export const RealmSettingsTabs = ({
   const { refresh: refreshRealms } = useRealms();
   const navigate = useNavigate();
   const isFeatureEnabled = useIsFeatureEnabled();
+  const [tableData, setTableData] = useState<
+    Record<string, string>[] | undefined
+  >(undefined);
 
   const { control, setValue, getValues } = useForm({
     mode: "onChange",
@@ -200,7 +207,47 @@ export const RealmSettingsTabs = ({
     convertToFormValues(r, setValue);
   };
 
-  useEffect(setupForm, [setValue, realm]);
+  const defaultSupportedLocales = useMemo(() => {
+    return realm.supportedLocales?.length
+      ? realm.supportedLocales
+      : [DEFAULT_LOCALE];
+  }, [realm]);
+
+  const defaultLocales = useMemo(() => {
+    return realm.defaultLocale?.length ? [realm.defaultLocale] : [];
+  }, [realm]);
+
+  const combinedLocales = useMemo(() => {
+    return Array.from(new Set([...defaultLocales, ...defaultSupportedLocales]));
+  }, [defaultLocales, defaultSupportedLocales]);
+
+  useEffect(() => {
+    setupForm();
+    const fetchLocalizationTexts = async () => {
+      try {
+        await Promise.all(
+          combinedLocales.map(async (locale) => {
+            try {
+              const response =
+                await adminClient.realms.getRealmLocalizationTexts({
+                  realm: realmName,
+                  selectedLocale: locale,
+                });
+
+              if (response) {
+                setTableData([response]);
+              }
+            } catch (error) {
+              return [];
+            }
+          }),
+        );
+      } catch (error) {
+        return [];
+      }
+    };
+    fetchLocalizationTexts();
+  }, [setValue, realm]);
 
   const save = async (r: UIRealmRepresentation) => {
     r = convertFormValuesToObject(r);
@@ -297,7 +344,7 @@ export const RealmSettingsTabs = ({
           />
         )}
       />
-      <PageSection variant="light" className="pf-u-p-0">
+      <PageSection variant="light" className="pf-v5-u-p-0">
         <RoutableTabs
           isBox
           mountOnEnter
@@ -354,7 +401,12 @@ export const RealmSettingsTabs = ({
             data-testid="rs-localization-tab"
             {...localizationTab}
           >
-            <LocalizationTab key={key} save={save} realm={realm} />
+            <LocalizationTab
+              key={key}
+              save={save}
+              realm={realm}
+              tableData={tableData}
+            />
           </Tab>
           <Tab
             title={<TabTitleText>{t("securityDefences")}</TabTitleText>}
@@ -422,7 +474,7 @@ export const RealmSettingsTabs = ({
             data-testid="rs-user-profile-tab"
             {...userProfileTab}
           >
-            <UserProfileTab />
+            <UserProfileTab setTableData={setTableData as any} />
           </Tab>
           <Tab
             title={<TabTitleText>{t("userRegistration")}</TabTitleText>}

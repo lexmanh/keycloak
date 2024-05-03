@@ -1,16 +1,14 @@
-import { Select, SelectOption } from "@patternfly/react-core";
+import { Select, SelectOption } from "@patternfly/react-core/deprecated";
 import { useState } from "react";
 import { Controller, ControllerRenderProps } from "react-hook-form";
-import { Options, UserProfileFieldProps } from "./UserProfileFields";
-import { UserProfileGroup } from "./UserProfileGroup";
 import {
-  UserFormFields,
-  fieldName,
-  isRequiredAttribute,
-  unWrap,
-} from "./utils";
+  OptionLabel,
+  Options,
+  UserProfileFieldProps,
+} from "./UserProfileFields";
+import { UserProfileGroup } from "./UserProfileGroup";
+import { UserFormFields, fieldName, isRequiredAttribute, label } from "./utils";
 
-type OptionLabel = Record<string, string> | undefined;
 export const SelectComponent = (props: UserProfileFieldProps) => {
   const { t, form, inputType, attribute } = props;
   const [open, setOpen] = useState(false);
@@ -35,11 +33,10 @@ export const SelectComponent = (props: UserProfileFieldProps) => {
   const options =
     (attribute.validators?.options as Options | undefined)?.options || [];
 
-  const optionLabel = attribute.annotations?.[
-    "inputOptionLabels"
-  ] as OptionLabel;
-  const label = (label: string) =>
-    optionLabel ? t(unWrap(optionLabel[label])) : label;
+  const optionLabel =
+    (attribute.annotations?.["inputOptionLabels"] as OptionLabel) || {};
+  const fetchLabel = (option: string) =>
+    label(props.t, optionLabel[option], option);
 
   return (
     <UserProfileGroup {...props}>
@@ -50,9 +47,7 @@ export const SelectComponent = (props: UserProfileFieldProps) => {
         render={({ field }) => (
           <Select
             toggleId={attribute.name}
-            onToggle={(b) => setOpen(b)}
-            isCreatable
-            onCreateOption={(value) => setValue(value, field)}
+            onToggle={(_event, b) => setOpen(b)}
             onSelect={(_, value) => {
               const option = value.toString();
               setValue(option, field);
@@ -63,19 +58,25 @@ export const SelectComponent = (props: UserProfileFieldProps) => {
             selections={
               field.value ? field.value : isMultiValue ? [] : t("choose")
             }
-            variant={isMultiValue ? "typeaheadmulti" : "single"}
+            variant={
+              isMultiValue
+                ? "typeaheadmulti"
+                : options.length >= 10
+                  ? "typeahead"
+                  : "single"
+            }
             aria-label={t("selectOne")}
             isOpen={open}
             isDisabled={attribute.readOnly}
             required={isRequired}
           >
-            {options.map((option) => (
+            {["", ...options].map((option) => (
               <SelectOption
                 selected={field.value === option}
                 key={option}
                 value={option}
               >
-                {label(option)}
+                {option ? fetchLabel(option) : t("choose")}
               </SelectOption>
             ))}
           </Select>

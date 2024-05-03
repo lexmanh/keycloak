@@ -12,7 +12,7 @@ import { cellWidth } from "@patternfly/react-table";
 import { intersectionBy, sortBy, uniqBy } from "lodash-es";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useHelp } from "ui-shared";
+import { useHelp } from "@keycloak/keycloak-ui-shared";
 
 import { adminClient } from "../admin-client";
 import { useAlerts } from "../components/alert/Alerts";
@@ -74,7 +74,10 @@ export const UserGroups = ({ user }: UserGroupsProps) => {
     const indirect: GroupRepresentation[] = [];
     if (!isDirectMembership)
       joinedUserGroups.forEach((g) => {
-        const paths = g.path?.substring(1).split("/").slice(0, -1) || [];
+        const paths = (
+          g.path?.substring(1).match(/((~\/)|[^/])+/g) || []
+        ).slice(0, -1);
+
         indirect.push(
           ...paths.map((p) => ({
             name: p,

@@ -1,3 +1,6 @@
+import { v4 as uuid } from "uuid";
+import Select from "../../../../forms/Select";
+
 import CommonPage from "../../../CommonPage";
 import ListingPage from "../../ListingPage";
 import RealmSettingsEventsTab from "./tabs/RealmSettingsEventsTab";
@@ -27,7 +30,6 @@ export default class RealmSettingsPage extends CommonPage {
   adminThemeList = "#kc-admin-ui-theme + ul";
   selectEmailTheme = "#kc-email-theme";
   emailThemeList = "#kc-email-theme + ul";
-  hostInput = "#kc-host";
   ssoSessionIdleSelectMenu = "#kc-sso-session-idle-select-menu";
   ssoSessionIdleSelectMenuList = "#kc-sso-session-idle-select-menu > div > ul";
   ssoSessionMaxSelectMenu = "#kc-sso-session-max-select-menu";
@@ -66,23 +68,23 @@ export default class RealmSettingsPage extends CommonPage {
     "#kc-l-supported-locales-select-multi-typeahead-typeahead";
   supportedLocalesToggle = "#kc-l-supported-locales";
   emailSaveBtn = "email-tab-save";
-  managedAccessSwitch = "user-managed-access-switch";
+  managedAccessSwitch = "userManagedAccessAllowed";
   userRegSwitch = "user-reg-switch";
   forgotPwdSwitch = "forgot-pw-switch";
   rememberMeSwitch = "remember-me-switch";
   emailAsUsernameSwitch = "email-as-username-switch";
+  editUsernameSwitch = "edit-username-switch";
   loginWithEmailSwitch = "login-with-email-switch";
   duplicateEmailsSwitch = "duplicate-emails-switch";
   verifyEmailSwitch = "verify-email-switch";
   authSwitch = "email-authentication-switch";
-  fromInput = "sender-email-address";
   enableSslCheck = "enable-ssl";
   enableStartTlsCheck = "enable-start-tls";
   addProviderDropdown = "addProviderDropdown";
   activeSwitch = "active";
   enabledSwitch = "enabled";
   addProviderButton = "add-provider-button";
-  displayName = "name-input";
+  displayName = "name";
   enableEvents = "eventsEnabled";
   eventsUserSave = "save-user";
   enableAdminEvents = "adminEventsEnabled";
@@ -95,10 +97,10 @@ export default class RealmSettingsPage extends CommonPage {
   testConnectionButton = "test-connection-button";
   modalTestConnectionButton = "modal-test-connection-button";
   emailAddressInput = "email-address-input";
-  addBundleButton = "add-bundle-button";
-  confirmAddBundle = "add-bundle-confirm-button";
-  keyInput = "key-input";
-  valueInput = "value-input";
+  addBundleButton = "add-translationBtn";
+  confirmAddTranslation = "add-translation-confirm-button";
+  keyInput = "key";
+  valueInput = "value";
   deleteAction = "delete-action";
   modalConfirm = "confirm";
   ssoSessionIdleInput = "sso-session-idle-input";
@@ -115,6 +117,7 @@ export default class RealmSettingsPage extends CommonPage {
   revokeRefreshTokenSwitch = "revoke-refresh-token-switch";
   accessTokenLifespanInput = "access-token-lifespan-input";
   accessTokenLifespanImplicitInput = "access-token-lifespan-implicit-input";
+  parRequestUriLifespanInput = "par-request-uri-lifespan-input";
   clientLoginTimeoutInput = "client-login-timeout-input";
   offlineSessionMaxInput = "offline-session-max-input";
   userInitiatedActionLifespanInput = "user-initiated-action-lifespan";
@@ -127,6 +130,10 @@ export default class RealmSettingsPage extends CommonPage {
   accessTokenLifespanSelectMenu = "#kc-access-token-lifespan-select-menu";
   accessTokenLifespanSelectMenuList =
     "#kc-access-token-lifespan-select-menu > div > ul";
+
+  parRequestUriLifespanSelectMenu = "#par-request-uri-lifespan-select-menu";
+  parRequestUriLifespanSelectMenuList =
+    "#par-request-uri-lifespan-select-menu > div > ul";
 
   accessTokenLifespanImplicitSelectMenu =
     "#kc-access-token-lifespan-implicit-select-menu";
@@ -172,19 +179,19 @@ export default class RealmSettingsPage extends CommonPage {
   #jsonEditorSelect = "jsonEditor-profilesView";
   #formViewSelectPolicies = "formView-policiesView";
   #jsonEditorSelectPolicies = "jsonEditor-policiesView";
-  #newClientProfileNameInput = "client-profile-name";
-  #newClientProfileDescriptionInput = "client-profile-description";
+  #newClientProfileNameInput = "name";
+  #newClientProfileDescriptionInput = "description";
   #saveNewClientProfileBtn = "saveCreateProfile";
   #cancelNewClientProfile = "cancelCreateProfile";
   #createPolicyEmptyStateBtn = "no-client-policies-empty-action";
   #createPolicyBtn = "createPolicy";
-  #newClientPolicyNameInput = "client-policy-name";
+  #newClientPolicyNameInput = "name";
   #newClientPolicyDescriptionInput = "client-policy-description";
   #saveNewClientPolicyBtn = "saveCreatePolicy";
   #cancelNewClientPolicyBtn = "cancelCreatePolicy";
-  #alertMessage = ".pf-c-alert__title";
-  #modalDialogTitle = ".pf-c-modal-box__title-text";
-  #modalDialogBodyText = ".pf-c-modal-box__body";
+  #alertMessage = ".pf-v5-c-alert__title";
+  #modalDialogTitle = ".pf-v5-c-modal-box__title-text";
+  #modalDialogBodyText = ".pf-v5-c-modal-box__body";
   #deleteDialogCancelBtn = "#modal-cancel";
   #jsonEditorSaveBtn = "jsonEditor-saveBtn";
   #jsonEditorSavePoliciesBtn = "jsonEditor-policies-saveBtn";
@@ -199,9 +206,9 @@ export default class RealmSettingsPage extends CommonPage {
   #clientPolicy = 'a[href*="realm-settings/client-policies/Test/edit-policy"]';
   #reloadBtn = "reloadProfile";
   #addExecutor = "addExecutor";
-  #addExecutorDrpDwn = ".pf-c-select__toggle";
+  #addExecutorDrpDwn = ".pf-v5-c-select__toggle";
   #addExecutorDrpDwnOption = "executorType-select";
-  #addExecutorCancelBtn = ".pf-c-form__actions a";
+  #addExecutorCancelBtn = ".pf-v5-c-form__actions a";
   #addExecutorSaveBtn = "addExecutor-saveBtn";
   #availablePeriodExecutorFld = "available-period";
   #editExecutorBtn =
@@ -210,32 +217,29 @@ export default class RealmSettingsPage extends CommonPage {
 
   #listingPage = new ListingPage();
   #addCondition = "addCondition";
-  #addConditionDrpDwn = ".pf-c-select__toggle";
+  #addConditionDrpDwn = ".pf-v5-c-select__toggle";
   #addConditionDrpDwnOption = "conditionType-select";
   #addConditionCancelBtn = "addCondition-cancelBtn";
   #addConditionSaveBtn = "addCondition-saveBtn";
   #clientRolesConditionLink = "client-roles-condition-link";
   #clientScopesConditionLink = "client-scopes-condition-link";
-  #eventListenersFormLabel = ".pf-c-form__label-text";
-  #eventListenersDrpDwn = ".pf-c-select.kc_eventListeners_select";
+  #eventListenersFormLabel = ".pf-v5-c-form__label-text";
+  #eventListenersDrpDwn = ".pf-v5-c-select.kc_eventListeners_select";
   #eventListenersSaveBtn = "saveEventListenerBtn";
   #eventListenersRevertBtn = "revertEventListenerBtn";
-  #eventListenersInputFld = ".pf-c-form-control.pf-c-select__toggle-typeahead";
-  #eventListenersDrpDwnOption = ".pf-c-select__menu-item";
+  #eventListenersInputFld =
+    ".pf-v5-c-form-control.pf-v5-c-select__toggle-typeahead";
+  #eventListenersDrpDwnOption = ".pf-v5-c-select__menu";
   #eventListenersDrwDwnSelect =
-    ".pf-c-button.pf-c-select__toggle-button.pf-m-plain";
+    ".pf-v5-c-button.pf-v5-c-select__toggle-button.pf-m-plain";
   #eventListenerRemove = '[data-ouia-component-id="Remove"]';
   #roleSelect = "config.roles0";
   #selectScopeButton = "addValue";
   #deleteClientRolesConditionBtn = "delete-client-roles-condition";
   #deleteClientScopesConditionBtn = "delete-client-scopes-condition";
-  #realmDisplayName = "#kc-display-name";
-  #frontEndURL = "#kc-frontend-url";
-  #requireSSL = "#kc-require-ssl";
-  #unmanagedAttributes = "#kc-user-profile-unmanaged-attribute-policy";
-  #fromDisplayName = "from-display-name";
-  #replyToEmail = "#kc-reply-to";
-  #port = "#kc-port";
+  #fromDisplayName = "smtpServer.fromDisplayName";
+  #replyToEmail = "smtpServer.replyTo";
+  #port = "smtpServer.port";
 
   #publicKeyBtn = ".kc-keys-list > tbody > tr > td > .button-wrapper > button";
   #localizationLocalesSubTab = "rs-localization-locales-tab";
@@ -256,6 +260,30 @@ export default class RealmSettingsPage extends CommonPage {
     this.#realmName = realmName;
   }
 
+  #getRealmDisplayName() {
+    return cy.findByTestId("displayName");
+  }
+
+  #getFrontEndURL() {
+    return cy.findByTestId("attributes.frontendUrl");
+  }
+
+  #getSSLRequired() {
+    return cy.get("#sslRequired");
+  }
+
+  #getUnmanagedAttributes() {
+    return cy.get("#unmanagedAttributePolicy");
+  }
+
+  getFromInput() {
+    return cy.findByTestId("smtpServer.from");
+  }
+
+  getHostInput() {
+    return cy.findByTestId("smtpServer.host");
+  }
+
   goToEventsTab() {
     this.tabUtils().clickTab(RealmSettingsTab.Events);
     return this.#realmSettingsEventsTab;
@@ -266,7 +294,7 @@ export default class RealmSettingsPage extends CommonPage {
     cy.get(this.#modalDialogBodyText).contains(
       "User and clients can't access the realm if it's disabled. Are you sure you want to continue?",
     );
-    cy.findByTestId(this.modalConfirm).contains("Disable").click();
+    cy.findByTestId(this.modalConfirm).click();
   }
   selectLoginThemeType(themeType: string) {
     cy.get(this.selectLoginTheme).click();
@@ -299,34 +327,34 @@ export default class RealmSettingsPage extends CommonPage {
   }
 
   fillHostField(host: string) {
-    cy.get(this.hostInput).clear().type(host);
+    this.getHostInput().clear();
+    this.getHostInput().type(host);
     return this;
   }
 
   getDisplayName(name: string) {
-    cy.get(this.#realmDisplayName).should("have.value", name);
+    this.#getRealmDisplayName().should("have.value", name);
     return this;
   }
 
   getFrontendURL(url: string) {
-    cy.get(this.#frontEndURL).should("have.value", url);
+    this.#getFrontEndURL().should("have.value", url);
     return this;
   }
 
   getRequireSSL(option: string) {
-    cy.get(this.#requireSSL).contains(option);
-
+    Select.assertSelectedItem(this.#getSSLRequired(), option);
     return this;
   }
 
   getUnmanagedAttributes(option: string) {
-    cy.get(this.#unmanagedAttributes).contains(option);
-
+    Select.assertSelectedItem(this.#getUnmanagedAttributes(), option);
     return this;
   }
 
   fillDisplayName(displayName: string) {
-    cy.get(this.#realmDisplayName).clear().type(displayName);
+    this.#getRealmDisplayName().clear();
+    this.#getRealmDisplayName().type(displayName);
   }
 
   clearRealmId() {
@@ -338,35 +366,30 @@ export default class RealmSettingsPage extends CommonPage {
   }
 
   fillReplyToEmail(email: string) {
-    cy.get(this.#replyToEmail).clear().type(email);
+    cy.findByTestId(this.#replyToEmail).clear();
+    cy.findByTestId(this.#replyToEmail).type(email);
   }
 
   fillPort(port: string) {
-    cy.get(this.#port).clear().type(port);
+    cy.findByTestId(this.#port).clear();
+    cy.findByTestId(this.#port).type(port);
   }
 
   fillFrontendURL(url: string) {
-    cy.get(this.#frontEndURL).clear().type(url);
+    this.clearFrontendURL();
+    this.#getFrontEndURL().type(url);
   }
 
   clearFrontendURL() {
-    cy.get(this.#frontEndURL).clear();
+    this.#getFrontEndURL().clear();
   }
 
   fillRequireSSL(option: string) {
-    cy.get(this.#requireSSL)
-      .click()
-      .get(".pf-c-select__menu-item")
-      .contains(option)
-      .click();
+    Select.selectItem(this.#getSSLRequired(), option);
   }
 
   fillUnmanagedAttributes(option: string) {
-    cy.get(this.#unmanagedAttributes)
-      .click()
-      .get(".pf-c-select__menu-item")
-      .contains(option)
-      .click();
+    Select.selectItem(this.#getUnmanagedAttributes(), option);
   }
 
   setDefaultLocale(locale: string) {
@@ -388,10 +411,10 @@ export default class RealmSettingsPage extends CommonPage {
   }
 
   addSenderEmail(senderEmail: string) {
-    cy.findByTestId(this.fromInput).clear();
+    this.getFromInput().clear();
 
     if (senderEmail) {
-      cy.findByTestId(this.fromInput).type(senderEmail);
+      this.getFromInput().type(senderEmail);
     }
 
     return this;
@@ -439,10 +462,29 @@ export default class RealmSettingsPage extends CommonPage {
   }
 
   toggleSwitch(switchName: string, waitFor: boolean | undefined = true) {
-    cy.intercept("/admin/realms/*").as("load");
+    const loadName = `load-${uuid()}`;
+    if (waitFor) {
+      cy.intercept({ path: "/admin/realms/*", times: 1 }).as(loadName);
+    }
     cy.findByTestId(switchName).click({ force: true });
     if (waitFor) {
-      cy.wait("@load");
+      cy.wait(`@${loadName}`);
+    }
+
+    return this;
+  }
+
+  assertSwitch(switchName: string, on: boolean) {
+    cy.findByTestId(switchName).should("have.value", on ? "on" : "off");
+
+    return this;
+  }
+
+  setSwitch(switchName: string, on: boolean) {
+    if (on) {
+      cy.findByTestId(switchName).check({ force: true });
+    } else {
+      cy.findByTestId(switchName).uncheck({ force: true });
     }
 
     return this;
@@ -474,7 +516,7 @@ export default class RealmSettingsPage extends CommonPage {
     cy.findByTestId(this.keyInput).type(key);
     cy.findByTestId(this.valueInput).type(value);
 
-    cy.findByTestId(this.confirmAddBundle).click({ force: true });
+    cy.findByTestId(this.confirmAddTranslation).click({ force: true });
 
     return this;
   }
@@ -611,6 +653,12 @@ export default class RealmSettingsPage extends CommonPage {
       this.accessTokenLifespanImplicitSelectMenu,
       this.accessTokenLifespanImplicitSelectMenuList,
     );
+    cy.findByTestId("par-request-uri-lifespan-input").clear().type("2");
+    this.changeTimeUnit(
+      "Hours",
+      this.parRequestUriLifespanSelectMenu,
+      this.parRequestUriLifespanSelectMenuList,
+    );
 
     cy.findByTestId(this.clientLoginTimeoutInput).clear().type("3");
     this.changeTimeUnit(
@@ -714,7 +762,7 @@ export default class RealmSettingsPage extends CommonPage {
   }
 
   shouldRemoveAllEventListeners() {
-    cy.get(".pf-c-button.pf-m-plain.pf-c-select__toggle-clear").click();
+    cy.get(".pf-v5-c-button.pf-m-plain.pf-v5-c-select__toggle-clear").click();
     cy.findByTestId(this.#eventListenersSaveBtn).click();
     cy.get(this.#eventListenersDrpDwn).should("not.have.text", "jboss-logging");
     cy.get(this.#eventListenersDrpDwn).should("not.have.text", "email");
@@ -882,7 +930,7 @@ export default class RealmSettingsPage extends CommonPage {
       "be.visible",
       "Success! Executor created successfully",
     );
-    cy.get('ul[class*="pf-c-data-list"]').should(
+    cy.get('ul[class*="pf-v5-c-data-list"]').should(
       "have.text",
       "secure-ciba-signed-authn-req",
     );
@@ -897,7 +945,7 @@ export default class RealmSettingsPage extends CommonPage {
     );
     cy.findByTestId(this.modalConfirm).contains("Delete");
     cy.get(this.#deleteDialogCancelBtn).contains("Cancel").click();
-    cy.get('ul[class*="pf-c-data-list"]').should(
+    cy.get('ul[class*="pf-v5-c-data-list"]').should(
       "have.text",
       "secure-ciba-signed-authn-req",
     );
@@ -941,7 +989,7 @@ export default class RealmSettingsPage extends CommonPage {
   }
 
   checkExecutorNotInList() {
-    cy.get('ul[class*="pf-c-data-list"]').should(
+    cy.get('ul[class*="pf-v5-c-data-list"]').should(
       "have.text",
       "secure-ciba-signed-authn-req",
     );
@@ -994,16 +1042,16 @@ export default class RealmSettingsPage extends CommonPage {
     cy.findByTestId(this.#jsonEditorReloadBtn).click();
 
     cy.get(this.#jsonEditor).type(`{pageup}{del} [{
-      "name": "Reload", 
+      "name": "Reload",
     }, {downarrow}{end}{backspace}{backspace}{backspace}{backspace}`);
 
     cy.findByTestId(this.#jsonEditorReloadBtn).click();
 
     cy.get(this.#jsonEditor).type(`{pageup}{del} [{
-      "name": "Test", 
+      "name": "Test",
       "description": "Test Description",
       "enabled": false,
-      "conditions": [], 
+      "conditions": [],
       "profiles": [],
     }, {downarrow}{end}{backspace}{backspace}{backspace}{backspace}`);
 
@@ -1112,7 +1160,10 @@ export default class RealmSettingsPage extends CommonPage {
       "be.visible",
       "Success! Condition created successfully",
     );
-    cy.get('ul[class*="pf-c-data-list"]').should("have.text", "client-roles");
+    cy.get('ul[class*="pf-v5-c-data-list"]').should(
+      "have.text",
+      "client-roles",
+    );
   }
 
   addClientScopes() {
@@ -1138,7 +1189,7 @@ export default class RealmSettingsPage extends CommonPage {
       "be.visible",
       "Success! Condition created successfully",
     );
-    cy.get('ul[class*="pf-c-data-list"]').contains("client-scopes");
+    cy.get('ul[class*="pf-v5-c-data-list"]').contains("client-scopes");
   }
 
   shouldEditClientRolesCondition() {
@@ -1171,7 +1222,7 @@ export default class RealmSettingsPage extends CommonPage {
   }
 
   checkConditionsListContains(name: string) {
-    cy.get('ul[class*="pf-c-data-list"]').contains(name);
+    cy.get('ul[class*="pf-v5-c-data-list"]').contains(name);
     return this;
   }
 

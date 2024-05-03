@@ -1,6 +1,9 @@
 import { PropsWithChildren, useEffect, useMemo } from "react";
 import { useMatch } from "react-router-dom";
-import { createNamedContext, useRequiredContext } from "ui-shared";
+import {
+  createNamedContext,
+  useRequiredContext,
+} from "@keycloak/keycloak-ui-shared";
 
 import { adminClient } from "../../admin-client";
 import { DashboardRouteWithRealm } from "../../dashboard/routes/Dashboard";
@@ -23,7 +26,7 @@ export const RealmContextProvider = ({ children }: PropsWithChildren) => {
 
   const realmParam = routeMatch?.params.realm;
   const realm = useMemo(
-    () => realmParam ?? environment.loginRealm,
+    () => decodeURIComponent(realmParam ?? environment.loginRealm),
     [realmParam],
   );
 

@@ -102,7 +102,7 @@ describe("Clients test", () => {
       commonPage
         .tableUtils()
         .checkRowItemExists(clientScopeName + 0)
-        .checkRowItemsEqualTo(2);
+        .checkRowItemsEqualTo(1);
     });
 
     it("Should search non-existent client scope by name", () => {
@@ -114,7 +114,7 @@ describe("Clients test", () => {
     it("Should search existing client scope by assigned type", () => {
       commonPage
         .tableToolbarUtils()
-        .selectSearchType(Filter.AssignedType)
+        .selectSearchType(Filter.Name, Filter.AssignedType)
         .selectSecondarySearchType(FilterAssignedType.Default);
       commonPage
         .tableUtils()
@@ -187,7 +187,7 @@ describe("Clients test", () => {
       commonPage.modalUtils().confirmModal();
       commonPage.masthead().checkNotificationMessage(msgScopeMappingRemoved);
       commonPage.tableToolbarUtils().searchItem(itemName, false);
-      commonPage.tableUtils().checkRowItemExists(itemName, false);
+      listingPage.assertNoResults();
     });
 
     it("Should remove multiple client scopes from search bar", () => {
@@ -217,13 +217,12 @@ describe("Clients test", () => {
       commonPage.tableToolbarUtils().clickSearchButton();
     });
 
-    //fails, issue https://github.com/keycloak/keycloak-admin-ui/issues/1874
     it("Should show initial items after filtering", () => {
       commonPage
         .tableToolbarUtils()
-        .selectSearchType(Filter.AssignedType)
+        .selectSearchType(Filter.Name, Filter.AssignedType)
         .selectSecondarySearchType(FilterAssignedType.Optional)
-        .selectSearchType(Filter.Name);
+        .selectSearchType(Filter.AssignedType, Filter.Name);
       commonPage
         .tableUtils()
         .checkRowItemExists(FilterAssignedType.Default, false)
@@ -302,7 +301,7 @@ describe("Clients test", () => {
 
       clientDetailsPage.goToClientScopesEvaluateGeneratedUserInfoTab();
       cy.get("div#generatedIdToken").contains('"preferred_username": "admin"');
-      cy.get("div#generatedIdToken").contains('"session_state"');
+      cy.get("div#generatedIdToken").contains('"sid"');
     });
   });
 
@@ -320,7 +319,7 @@ describe("Clients test", () => {
 
       createClientPage
         .fillClientData("")
-        .selectClientType("openid-connect")
+        .selectClientType("OpenID Connect")
         .cancel();
 
       cy.url().should("not.include", "/add-client");
@@ -360,7 +359,7 @@ describe("Clients test", () => {
 
       createClientPage
         .fillClientData("test_client")
-        .selectClientType("openid-connect")
+        .selectClientType("OpenID Connect")
         .continue()
         .back()
         .checkGeneralSettingsStepActive();
@@ -373,7 +372,7 @@ describe("Clients test", () => {
 
       createClientPage
         .fillClientData("")
-        .selectClientType("openid-connect")
+        .selectClientType("OpenID Connect")
         .continue()
         .checkClientIdRequiredMessage();
 
@@ -398,7 +397,7 @@ describe("Clients test", () => {
       commonPage.tableToolbarUtils().clickPrimaryButton();
 
       createClientPage
-        .selectClientType("openid-connect")
+        .selectClientType("OpenID Connect")
         .fillClientData(itemId)
         .continue()
         .switchClientAuthentication()
@@ -517,6 +516,7 @@ describe("Clients test", () => {
     });
 
     const identicalClientId = "identical";
+
     it("Should fail to create client with same ID", () => {
       commonPage.sidebar().goToClients();
       commonPage.tableToolbarUtils().createClient();
@@ -764,7 +764,7 @@ describe("Clients test", () => {
       client = "client_" + uuid();
       commonPage.tableToolbarUtils().createClient();
       createClientPage
-        .selectClientType("openid-connect")
+        .selectClientType("OpenID Connect")
         .fillClientData(client)
         .continue();
 
@@ -853,8 +853,8 @@ describe("Clients test", () => {
 
       advancedTab.revertAuthFlowOverride();
       advancedTab.jumpToAuthFlow();
-      advancedTab.checkBrowserFlowInput("");
-      advancedTab.checkDirectGrantInput("");
+      advancedTab.checkBrowserFlowInput("Choose...");
+      advancedTab.checkDirectGrantInput("Choose...");
       advancedTab.selectBrowserFlowInput("browser");
       advancedTab.selectDirectGrantInput("docker auth");
 
@@ -1000,6 +1000,7 @@ describe("Clients test", () => {
 
   describe("Mapping tab", () => {
     const mappingClient = "mapping-client";
+
     beforeEach(() => {
       loginPage.logIn();
       keycloakBefore();

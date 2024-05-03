@@ -3,11 +3,14 @@ import type IdentityProviderRepresentation from "@keycloak/keycloak-admin-client
 import { FormGroup, Title } from "@patternfly/react-core";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { HelpItem } from "ui-shared";
+import {
+  FormErrorText,
+  HelpItem,
+  TextControl,
+} from "@keycloak/keycloak-ui-shared";
 
 import { adminClient } from "../../admin-client";
 import { FileUploadForm } from "../../components/json-file-upload/FileUploadForm";
-import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import environment from "../../environment";
 import { addTrailingSlash } from "../../util";
@@ -26,7 +29,6 @@ export const SamlConnectSettings = () => {
   const { realm } = useRealm();
   const {
     setValue,
-    register,
     setError,
     clearErrors,
     formState: { errors },
@@ -81,27 +83,15 @@ export const SamlConnectSettings = () => {
         {t("samlSettings")}
       </Title>
 
-      <FormGroup
+      <TextControl
+        name="config.entityId"
         label={t("serviceProviderEntityId")}
-        fieldId="kc-service-provider-entity-id"
-        labelIcon={
-          <HelpItem
-            helpText={t("serviceProviderEntityIdHelp")}
-            fieldLabelId="serviceProviderEntityId"
-          />
-        }
-        isRequired
-        helperTextInvalid={t("required")}
-        validated={errors.config?.entityId ? "error" : "default"}
-      >
-        <KeycloakTextInput
-          data-testid="serviceProviderEntityId"
-          id="kc-service-provider-entity-id"
-          validated={errors.config?.entityId ? "error" : "default"}
-          defaultValue={`${environment.authServerUrl}/realms/${realm}`}
-          {...register("config.entityId", { required: true })}
-        />
-      </FormGroup>
+        labelIcon={t("serviceProviderEntityIdHelp")}
+        defaultValue={`${environment.authServerUrl}/realms/${realm}`}
+        rules={{
+          required: t("required"),
+        }}
+      />
 
       <DiscoveryEndpointField
         id="saml"
@@ -115,8 +105,6 @@ export const SamlConnectSettings = () => {
                 fieldLabelId="importConfig"
               />
             }
-            validated={errors.discoveryError ? "error" : "default"}
-            helperTextInvalid={errors.discoveryError?.message}
           >
             <FileUploadForm
               id="kc-import-config"
@@ -126,6 +114,11 @@ export const SamlConnectSettings = () => {
               validated={errors.discoveryError ? "error" : "default"}
               onChange={(value) => fileUpload(value)}
             />
+            {errors.discoveryError && (
+              <FormErrorText
+                message={errors.discoveryError.message as string}
+              />
+            )}
           </FormGroup>
         }
       >

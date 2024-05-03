@@ -1,7 +1,7 @@
 import { Page } from "@patternfly/react-core";
 import { PropsWithChildren, Suspense } from "react";
 import { Outlet } from "react-router-dom";
-import { Help, mainPageContentId } from "ui-shared";
+import { Help, mainPageContentId } from "@keycloak/keycloak-ui-shared";
 
 import { Header } from "./PageHeader";
 import { PageNav } from "./PageNav";
@@ -24,21 +24,23 @@ import { AuthWall } from "./root/AuthWall";
 
 const AppContexts = ({ children }: PropsWithChildren) => (
   <ErrorBoundaryProvider>
-    <RealmsProvider>
+    <ServerInfoProvider>
       <RealmContextProvider>
         <WhoAmIContextProvider>
-          <RecentRealmsProvider>
-            <AccessContextProvider>
-              <Help>
-                <AlertProvider>
-                  <SubGroups>{children}</SubGroups>
-                </AlertProvider>
-              </Help>
-            </AccessContextProvider>
-          </RecentRealmsProvider>
+          <RealmsProvider>
+            <RecentRealmsProvider>
+              <AccessContextProvider>
+                <Help>
+                  <AlertProvider>
+                    <SubGroups>{children}</SubGroups>
+                  </AlertProvider>
+                </Help>
+              </AccessContextProvider>
+            </RecentRealmsProvider>
+          </RealmsProvider>
         </WhoAmIContextProvider>
       </RealmContextProvider>
-    </RealmsProvider>
+    </ServerInfoProvider>
   </ErrorBoundaryProvider>
 );
 
@@ -53,13 +55,11 @@ export const App = () => {
         mainContainerId={mainPageContentId}
       >
         <ErrorBoundaryFallback fallback={ErrorRenderer}>
-          <ServerInfoProvider>
-            <Suspense fallback={<KeycloakSpinner />}>
-              <AuthWall>
-                <Outlet />
-              </AuthWall>
-            </Suspense>
-          </ServerInfoProvider>
+          <Suspense fallback={<KeycloakSpinner />}>
+            <AuthWall>
+              <Outlet />
+            </AuthWall>
+          </Suspense>
         </ErrorBoundaryFallback>
       </Page>
     </AppContexts>

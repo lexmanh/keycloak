@@ -23,7 +23,9 @@ export const LocaleSelector = ({
     key: locale,
     value: localeToDisplayName(locale) || "",
   }));
-
+  if (!locales.length) {
+    return null;
+  }
   return (
     <FormProvider {...form}>
       <SelectControl
@@ -32,6 +34,7 @@ export const LocaleSelector = ({
         label={t("selectALocale")}
         controller={{ defaultValue: "" }}
         options={locales}
+        variant={locales.length >= 10 ? "typeahead" : "single"}
       />
     </FormProvider>
   );

@@ -22,13 +22,9 @@ import { adminClient } from "../admin-client";
 
 type GroupTableProps = {
   refresh: () => void;
-  canViewDetails: boolean;
 };
 
-export const GroupTable = ({
-  refresh: viewRefresh,
-  canViewDetails,
-}: GroupTableProps) => {
+export const GroupTable = ({ refresh: viewRefresh }: GroupTableProps) => {
   const { t } = useTranslation();
 
   const [selectedRows, setSelectedRows] = useState<GroupRepresentation[]>([]);
@@ -54,6 +50,7 @@ export const GroupTable = ({
     let groupsData = undefined;
     if (id) {
       const args: SubGroupQuery = {
+        search: search || "",
         first: first,
         max: max,
         parentId: id,
@@ -192,7 +189,7 @@ export const GroupTable = ({
             name: "name",
             displayKey: "groupName",
             cellRenderer: (group) =>
-              canViewDetails ? (
+              group.access?.view ? (
                 <Link key={group.id} to={`${location.pathname}/${group.id}`}>
                   {group.name}
                 </Link>

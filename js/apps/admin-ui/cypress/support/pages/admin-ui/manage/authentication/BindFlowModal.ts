@@ -1,8 +1,8 @@
 import ModalUtils from "../../../../util/ModalUtils";
 
 export default class BindFlowModal extends ModalUtils {
-  #bindingType = "#chooseBindingType";
-  #dropdownSelectToggleItem = ".pf-c-select__menu > li";
+  #bindingType = "#bindingType";
+  #dropdownSelectToggleItem = ".pf-v5-c-select__menu > li";
 
   fill(bindingType: string) {
     cy.get(this.#bindingType).click();

@@ -7,7 +7,10 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { isUserProfileError, setUserProfileServerError } from "ui-shared";
+import {
+  isUserProfileError,
+  setUserProfileServerError,
+} from "@keycloak/keycloak-ui-shared";
 
 import { adminClient } from "../admin-client";
 import { useAlerts } from "../components/alert/Alerts";
@@ -44,6 +47,7 @@ export default function CreateUser() {
       }
 
       setRealm(realm);
+      form.setValue("attributes.locale", realm.defaultLocale || "");
       setUserProfileMetadata(userProfileMetadata);
     },
     [],

@@ -19,7 +19,7 @@
 # Testsuite
 ###################################################################################################
 
-/testsuite/                                                 @keycloak/core-maintainers @keycloak/cloud-native-maintainers @keycloak/store-maintainers @keycloak/maintainers
+/testsuite/                                                 @keycloak/core-clients-maintainers @keycloak/core-iam-maintainers @keycloak/cloud-native-maintainers @keycloak/maintainers
 
 ###################################################################################################
 # Core (@keycloak/core-maintainers)
@@ -37,18 +37,16 @@
 /integration/client-cli/admin-cli                           @keycloak/cloud-native-maintainers @keycloak/maintainers
 
 ###################################################################################################
-# Store (@keycloak/store-maintainers)
-###################################################################################################
-
-/model/                                                     @keycloak/store-maintainers @keycloak/maintainers
-/testsuite/model/                                           @keycloak/store-maintainers @keycloak/maintainers
-
-###################################################################################################
 # UI (@keycloak/ui-maintainers)
 ###################################################################################################
 
+/eslint.config.js                                           @keycloak/ui-maintainers
+/package.json                                               @keycloak/ui-maintainers
+/pnpm-lock.yaml                                             @keycloak/ui-maintainers
+/pnpm-workspace.yaml                                        @keycloak/ui-maintainers
+/tsconfig.eslint.json                                       @keycloak/ui-maintainers
+/tsconfig.json                                              @keycloak/ui-maintainers
+/themes/                                                    @keycloak/ui-maintainers @keycloak/maintainers
 /js/                                                        @keycloak/ui-maintainers
 /adapters/oidc/js/                                          @keycloak/ui-maintainers
 /rest/admin-ui-ext/                                         @keycloak/ui-maintainers
-/themes/src/main/resources/theme/keycloak.v2/account/       @keycloak/ui-maintainers
-/testsuite/integration-arquillian/tests/other/base-ui/      @keycloak/ui-maintainers

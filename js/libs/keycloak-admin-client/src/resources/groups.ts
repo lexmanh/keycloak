@@ -8,6 +8,7 @@ import type UserRepresentation from "../defs/userRepresentation.js";
 import Resource from "./resource.js";
 
 interface Query {
+  q?: string;
   search?: string;
   exact?: boolean;
 }
@@ -22,7 +23,8 @@ interface SummarizedQuery {
 }
 
 export type GroupQuery = Query & PaginatedQuery & SummarizedQuery;
-export type SubGroupQuery = PaginatedQuery &
+export type SubGroupQuery = Query &
+  PaginatedQuery &
   SummarizedQuery & {
     parentId: string;
   };
@@ -35,7 +37,14 @@ export interface GroupCountQuery {
 export class Groups extends Resource<{ realm?: string }> {
   public find = this.makeRequest<GroupQuery, GroupRepresentation[]>({
     method: "GET",
-    queryParamKeys: ["search", "exact", "briefRepresentation", "first", "max"],
+    queryParamKeys: [
+      "search",
+      "q",
+      "exact",
+      "briefRepresentation",
+      "first",
+      "max",
+    ],
   });
 
   public create = this.makeRequest<GroupRepresentation, { id: string }>({
@@ -134,7 +143,7 @@ export class Groups extends Resource<{ realm?: string }> {
       method: "GET",
       path: "/{parentId}/children",
       urlParamKeys: ["parentId"],
-      queryParamKeys: ["first", "max", "briefRepresentation"],
+      queryParamKeys: ["search", "first", "max", "briefRepresentation"],
       catchNotFound: true,
     },
   );

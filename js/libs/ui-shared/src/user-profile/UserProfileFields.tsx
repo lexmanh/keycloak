@@ -54,6 +54,8 @@ export type UserProfileFieldProps = {
   renderer?: (attribute: UserProfileAttributeMetadata) => ReactNode;
 };
 
+export type OptionLabel = Record<string, string> | undefined;
+
 export const FIELDS: {
   [type in InputType]: (props: UserProfileFieldProps) => JSX.Element;
 } = {
@@ -139,9 +141,9 @@ export const UserProfileFields = ({
         .map(({ group, attributes }) => ({
           title: label(t, group.displayHeader, group.name) || t("general"),
           panel: (
-            <div className="pf-c-form">
+            <div className="pf-v5-c-form">
               {group.displayDescription && (
-                <Text className="pf-u-pb-lg">
+                <Text className="pf-v5-u-pb-lg">
                   {label(t, group.displayDescription, "")}
                 </Text>
               )}
@@ -182,11 +184,12 @@ const FormField = ({
   const value = form.watch(
     fieldName(attribute.name) as FieldPath<UserFormFields>,
   );
-  const inputType = useMemo(
-    () => determineInputType(attribute, value),
-    [attribute],
-  );
-  const Component = FIELDS[inputType];
+  const inputType = useMemo(() => determineInputType(attribute), [attribute]);
+
+  const Component =
+    attribute.multivalued || isMultiValue(value)
+      ? FIELDS["multi-input"]
+      : FIELDS[inputType];
 
   if (attribute.name === "locale")
     return (
@@ -212,7 +215,6 @@ const DEFAULT_INPUT_TYPE = "text" satisfies InputType;
 
 function determineInputType(
   attribute: UserProfileAttributeMetadata,
-  value: string | string[],
 ): InputType {
   // Always treat the root attributes as a text field.
   if (isRootAttribute(attribute.name)) {
@@ -224,11 +226,6 @@ function determineInputType(
   // if we have an valid input type use that to render
   if (isValidInputType(inputType)) {
     return inputType;
-  }
-
-  // If the attribute has no valid input type and it's multi value use "multi-input"
-  if (isMultiValue(value)) {
-    return "multi-input";
   }
 
   // In all other cases use the default

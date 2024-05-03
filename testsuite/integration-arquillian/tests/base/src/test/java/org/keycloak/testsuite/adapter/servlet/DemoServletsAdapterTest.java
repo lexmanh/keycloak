@@ -138,12 +138,6 @@ import static org.keycloak.testsuite.util.WaitUtils.waitForPageToLoad;
  * @author tkyjovsk
  */
 @AppServerContainer(ContainerConstants.APP_SERVER_UNDERTOW)
-@AppServerContainer(ContainerConstants.APP_SERVER_WILDFLY)
-@AppServerContainer(ContainerConstants.APP_SERVER_EAP)
-@AppServerContainer(ContainerConstants.APP_SERVER_EAP6)
-@AppServerContainer(ContainerConstants.APP_SERVER_EAP71)
-@AppServerContainer(ContainerConstants.APP_SERVER_TOMCAT8)
-@AppServerContainer(ContainerConstants.APP_SERVER_TOMCAT9)
 public class DemoServletsAdapterTest extends AbstractServletsAdapterTest {
 
     @Page
@@ -755,13 +749,13 @@ public class DemoServletsAdapterTest extends AbstractServletsAdapterTest {
 
         // Get time of token
         AccessToken token = tokenMinTTLPage.getAccessToken();
-        int tokenIssued1 = token.getIssuedAt();
+        long tokenIssued1 = token.getIat();
 
         // Sets 5 minutes offset and assert access token will be still the same
         setAdapterAndServerTimeOffset(300, tokenMinTTLPage.toString());
         tokenMinTTLPage.navigateTo();
         token = tokenMinTTLPage.getAccessToken();
-        int tokenIssued2 = token.getIssuedAt();
+        long tokenIssued2 = token.getIat();
         Assert.assertEquals(tokenIssued1, tokenIssued2);
         assertFalse(token.isExpired());
 
@@ -769,7 +763,7 @@ public class DemoServletsAdapterTest extends AbstractServletsAdapterTest {
         setAdapterAndServerTimeOffset(540, tokenMinTTLPage.toString());
         tokenMinTTLPage.navigateTo();
         token = tokenMinTTLPage.getAccessToken();
-        int tokenIssued3 = token.getIssuedAt();
+        long tokenIssued3 = token.getIat();
         Assert.assertTrue(tokenIssued3 > tokenIssued1);
 
         // Revert times
@@ -853,8 +847,8 @@ public class DemoServletsAdapterTest extends AbstractServletsAdapterTest {
             testRealmLoginPage.form().setPassword("password");
             testRealmLoginPage.form().login();
             AccessToken token = tokenMinTTLPage.getAccessToken();
-            int authTime = token.getAuthTime();
-            assertThat(authTime, is(greaterThanOrEqualTo(currentTime + 10)));
+            long authTime = token.getAuth_time();
+            assertThat(authTime, is(greaterThanOrEqualTo(currentTime + 10L)));
         } finally {
             setAdapterAndServerTimeOffset(0, securePortal.toString());
         }

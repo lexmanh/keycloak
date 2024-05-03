@@ -8,10 +8,11 @@ export const keycloak = new Keycloak({
   clientId: environment.clientId,
 });
 
+keycloak.onAuthLogout = () => keycloak.login();
+
 export async function initKeycloak() {
   const authenticated = await keycloak.init({
     onLoad: "check-sso",
-    pkceMethod: "S256",
   });
 
   // Force the user to login if not authenticated.

@@ -37,7 +37,6 @@ public class MergedUpdate<S extends SessionEntity> implements SessionUpdateTask<
     private final long lifespanMs;
     private final long maxIdleTimeMs;
 
-
     private MergedUpdate(CacheOperation operation, CrossDCMessageStatus crossDCMessageStatus, long lifespanMs, long maxIdleTimeMs) {
         this.operation = operation;
         this.crossDCMessageStatus = crossDCMessageStatus;
@@ -114,7 +113,6 @@ public class MergedUpdate<S extends SessionEntity> implements SessionUpdateTask<
                 result.childUpdates.add(child);
             }
         }
-
         return result;
     }
 
@@ -122,6 +120,5 @@ public class MergedUpdate<S extends SessionEntity> implements SessionUpdateTask<
     public String toString() {
         return "MergedUpdate" + childUpdates;
     }
-
 
 }

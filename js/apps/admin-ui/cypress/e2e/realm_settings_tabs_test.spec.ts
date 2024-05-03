@@ -1,13 +1,15 @@
 import { v4 as uuid } from "uuid";
-import SidebarPage from "../support/pages/admin-ui/SidebarPage";
+
+import FormValidation from "../support/forms/FormValidation";
 import LoginPage from "../support/pages/LoginPage";
-import RealmSettingsPage from "../support/pages/admin-ui/manage/realm_settings/RealmSettingsPage";
 import Masthead from "../support/pages/admin-ui/Masthead";
-import { keycloakBefore } from "../support/util/keycloak_hooks";
-import adminClient from "../support/util/AdminClient";
+import SidebarPage from "../support/pages/admin-ui/SidebarPage";
 import KeysTab from "../support/pages/admin-ui/manage/realm_settings/KeysTab";
-import ModalUtils from "../support/util/ModalUtils";
+import RealmSettingsPage from "../support/pages/admin-ui/manage/realm_settings/RealmSettingsPage";
 import UserRegistration from "../support/pages/admin-ui/manage/realm_settings/UserRegistration";
+import adminClient from "../support/util/AdminClient";
+import ModalUtils from "../support/util/ModalUtils";
+import { keycloakBefore } from "../support/util/keycloak_hooks";
 
 const loginPage = new LoginPage();
 const sidebarPage = new SidebarPage();
@@ -101,13 +103,17 @@ describe("Realm settings tabs tests", () => {
     realmSettingsPage.fillReplyToEmail("replyTo@email.com");
     realmSettingsPage.fillPort("10");
     cy.findByTestId("email-tab-save").click();
-    cy.get("#kc-display-name-helper").contains("You must enter a valid email.");
-    cy.get("#kc-host-helper").contains("Required field");
+
+    FormValidation.assertMessage(
+      realmSettingsPage.getFromInput(),
+      "You must enter a valid email.",
+    );
+    FormValidation.assertRequired(realmSettingsPage.getHostInput());
 
     cy.findByTestId("email-tab-revert").click();
-    cy.findByTestId("sender-email-address").should("be.empty");
-    cy.findByTestId("from-display-name").should("be.empty");
-    cy.get("#kc-port").should("be.empty");
+    cy.findByTestId("smtpServer.from").should("be.empty");
+    cy.findByTestId("smtpServer.fromDisplayName").should("be.empty");
+    cy.findByTestId("smtpServer.port").should("be.empty");
 
     realmSettingsPage.addSenderEmail("example@example.com");
     realmSettingsPage.toggleCheck(realmSettingsPage.enableSslCheck);
@@ -134,29 +140,55 @@ describe("Realm settings tabs tests", () => {
     it("Realm header settings- update single input", () => {
       sidebarPage.goToRealmSettings();
       realmSettingsPage.goToSecurityDefensesTab();
-      cy.get("#xFrameOptions").clear().type("DENY");
+      cy.findByTestId("browserSecurityHeaders.xFrameOptions").clear();
+      cy.findByTestId("browserSecurityHeaders.xFrameOptions").type("DENY");
       realmSettingsPage.saveSecurityDefensesHeaders();
       masthead.checkNotificationMessage("Realm successfully updated");
     });
+
     it("Realm header settings- update all inputs", () => {
       sidebarPage.goToRealmSettings();
       realmSettingsPage.goToSecurityDefensesTab();
-      cy.get("#xFrameOptions").clear().type("SAMEORIGIN");
-      cy.get("#contentSecurityPolicy").clear().type("default-src 'self'");
-      cy.get("#strictTransportSecurity").clear().type("max-age=31536000");
-      cy.get("#xContentTypeOptions").clear().type("nosniff");
-      cy.get("#xRobotsTag").clear().type("none");
-      cy.get("#xXSSProtection").clear().type("1; mode=block");
-      cy.get("#strictTransportSecurity").clear().type("max-age=31537000");
-      cy.get("#referrerPolicy").clear().type("referrer");
+      cy.findByTestId("browserSecurityHeaders.xFrameOptions").clear();
+      cy.findByTestId("browserSecurityHeaders.xFrameOptions").type(
+        "SAMEORIGIN",
+      );
+      cy.findByTestId("browserSecurityHeaders.contentSecurityPolicy").clear();
+      cy.findByTestId("browserSecurityHeaders.contentSecurityPolicy").type(
+        "default-src 'self'",
+      );
+      cy.findByTestId("browserSecurityHeaders.strictTransportSecurity").clear();
+      cy.findByTestId("browserSecurityHeaders.strictTransportSecurity").type(
+        "max-age=31536000",
+      );
+      cy.findByTestId("browserSecurityHeaders.xContentTypeOptions").clear();
+      cy.findByTestId("browserSecurityHeaders.xContentTypeOptions").type(
+        "nosniff",
+      );
+      cy.findByTestId("browserSecurityHeaders.xRobotsTag").clear();
+      cy.findByTestId("browserSecurityHeaders.xRobotsTag").type("none");
+      cy.findByTestId("browserSecurityHeaders.xXSSProtection").clear();
+      cy.findByTestId("browserSecurityHeaders.xXSSProtection").type(
+        "1; mode=block",
+      );
+      cy.findByTestId("browserSecurityHeaders.strictTransportSecurity").clear();
+      cy.findByTestId("browserSecurityHeaders.strictTransportSecurity").type(
+        "max-age=31537000",
+      );
+      cy.findByTestId("browserSecurityHeaders.referrerPolicy").clear();
+      cy.findByTestId("browserSecurityHeaders.referrerPolicy").type("referrer");
       realmSettingsPage.saveSecurityDefensesHeaders();
       masthead.checkNotificationMessage("Realm successfully updated");
     });
+
     it("Brute force detection- update values", () => {
       sidebarPage.goToRealmSettings();
       realmSettingsPage.goToSecurityDefensesTab();
       realmSettingsPage.goToSecurityDefensesBruteForceTab();
-      cy.get("#bruteForceProtected").click({ force: true });
+      cy.get("#kc-brute-force-mode").click();
+      cy.findByTestId("select-brute-force-mode")
+        .contains("Lockout temporarily")
+        .click();
       cy.findByTestId("waitIncrementSeconds").type("1");
       cy.findByTestId("maxFailureWaitSeconds").type("1");
       cy.findByTestId("maxDeltaTimeSeconds").type("1");
@@ -176,7 +208,7 @@ describe("Realm settings tabs tests", () => {
 
       cy.get(realmSettingsPage.supportedLocalesTypeahead)
         .click()
-        .get(".pf-c-select__menu-item")
+        .get(".pf-v5-c-select__menu-item")
         .contains("Danish")
         .click();
       cy.get("#kc-l-supported-locales").click();
@@ -199,18 +231,17 @@ describe("Realm settings tabs tests", () => {
       addBundle();
 
       masthead.checkNotificationMessage(
-        "Success! The message bundle has been added.",
+        "Success! The translation has been added.",
       );
 
       cy.findByTestId("editable-rows-table")
         .contains("td", "123")
         .should("be.visible");
 
-      cy.findByTestId("realmOverrides-deleteKebabToggle").click();
+      cy.get(".pf-v5-c-table__action button").click();
+      cy.contains("button", "Delete").click();
       cy.findByTestId("confirm").click();
-      masthead.checkNotificationMessage(
-        "Successfully removed message(s) from the bundle.",
-      );
+      masthead.checkNotificationMessage("Successfully removed translation(s).");
     });
 
     it("Realm Overrides - Search for and delete bundle", () => {
@@ -228,11 +259,9 @@ describe("Realm settings tabs tests", () => {
 
       cy.findByTestId("selectAll").click();
       cy.get('[data-testid="toolbar-deleteBtn"] button').click();
-      cy.findByTestId("delete-selected-bundleBtn").click();
+      cy.findByTestId("delete-selected-TranslationBtn").click();
       cy.findByTestId("confirm").click();
-      masthead.checkNotificationMessage(
-        "Successfully removed message(s) from the bundle.",
-      );
+      masthead.checkNotificationMessage("Successfully removed translation(s).");
     });
 
     it("Realm Overrides - Edit and cancel edit message bundle", () => {
@@ -242,23 +271,25 @@ describe("Realm settings tabs tests", () => {
 
       addBundle();
 
-      cy.findByTestId("editUserLabelBtn-0").click();
-      cy.findByTestId("editUserLabelCancelBtn-0").click();
+      cy.findByTestId("editTranslationBtn-0").click();
+      cy.findByTestId("editTranslationCancelBtn-0").click();
 
-      cy.findByTestId("editUserLabelBtn-0").click();
-      cy.findByTestId("editUserLabelInput-0").click().clear().type("def");
-      cy.findByTestId("editUserLabelAcceptBtn-0").click();
+      cy.findByTestId("editTranslationBtn-0").click();
+      cy.findByTestId("editTranslationValueInput-0")
+        .click()
+        .clear()
+        .type("def");
+      cy.findByTestId("editTranslationAcceptBtn-0").click();
 
       cy.findByTestId("editable-rows-table")
         .contains("td", "def")
         .should("be.visible");
 
-      cy.findByTestId("realmOverrides-deleteKebabToggle").click();
+      cy.get(".pf-v5-c-table__action button").click();
+      cy.contains("button", "Delete").click();
       cy.findByTestId("confirm").click();
 
-      masthead.checkNotificationMessage(
-        "Successfully removed message(s) from the bundle.",
-      );
+      masthead.checkNotificationMessage("Successfully removed translation(s).");
     });
 
     it("Effective Message Bundles - Check before search message", () => {
@@ -343,7 +374,7 @@ describe("Realm settings tabs tests", () => {
     it("Check a11y violations on localization realm overrides sub tab/ adding message bundle", () => {
       realmSettingsPage.goToLocalizationTab();
       realmSettingsPage.goToLocalizationRealmOverridesSubTab();
-      cy.findByTestId("add-bundle-button").click();
+      cy.findByTestId("add-translationBtn").click();
       cy.checkA11y();
       modalUtils.cancelModal();
     });

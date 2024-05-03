@@ -28,7 +28,7 @@ import {
   toDedicatedScope,
 } from "../routes/DedicatedScopeDetails";
 import { toMapper } from "../routes/Mapper";
-import { DedicatedScope } from "./DecicatedScope";
+import { DedicatedScope } from "./DedicatedScope";
 
 export default function DedicatedScopes() {
   const { t } = useTranslation();
@@ -98,11 +98,11 @@ export default function DedicatedScopes() {
   return (
     <>
       <ViewHeader
-        titleKey={client.clientId!}
+        titleKey={client.clientId! + "-dedicated"}
         subKey="dedicatedScopeExplain"
         divider={false}
       />
-      <PageSection variant="light" className="pf-u-p-0">
+      <PageSection variant="light" className="pf-v5-u-p-0">
         <RoutableTabs
           isBox
           mountOnEnter

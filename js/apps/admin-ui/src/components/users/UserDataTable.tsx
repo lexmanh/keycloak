@@ -104,6 +104,7 @@ export function UserDataTable() {
   const [realm, setRealm] = useState<RealmRepresentation | undefined>();
   const [selectedRows, setSelectedRows] = useState<UserRepresentation[]>([]);
   const [searchType, setSearchType] = useState<SearchType>("default");
+  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<UserAttribute[]>([]);
   const [profile, setProfile] = useState<UserProfileConfig>({});
   const [query, setQuery] = useState("");
@@ -153,7 +154,7 @@ export function UserDataTable() {
       params.search = searchParam;
     }
 
-    if (!listUsers && !searchParam) {
+    if (!listUsers && !(params.search || params.q)) {
       return [];
     }
 
@@ -243,7 +244,7 @@ export function UserDataTable() {
             {Object.values(activeFilters).map((entry) => {
               return (
                 <ChipGroup
-                  className="pf-u-mt-md pf-u-mr-md"
+                  className="pf-v5-u-mt-md pf-v5-u-mr-md"
                   key={entry.name}
                   categoryName={
                     entry.displayName.length ? entry.displayName : entry.name
@@ -277,6 +278,8 @@ export function UserDataTable() {
   const toolbar = () => {
     return (
       <UserDataTableToolbarItems
+        searchDropdownOpen={searchDropdownOpen}
+        setSearchDropdownOpen={setSearchDropdownOpen}
         realm={realm}
         hasSelectedRows={selectedRows.length === 0}
         toggleDeleteDialog={toggleDeleteDialog}
@@ -336,7 +339,7 @@ export function UserDataTable() {
               <Toolbar>
                 <ToolbarContent>{toolbar()}</ToolbarContent>
               </Toolbar>
-              <EmptyState data-testid="empty-state" variant="large">
+              <EmptyState data-testid="empty-state" variant="lg">
                 <TextContent className="kc-search-users-text">
                   <Text>{t("searchForUserDescription")}</Text>
                 </TextContent>

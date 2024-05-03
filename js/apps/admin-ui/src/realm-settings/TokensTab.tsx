@@ -3,21 +3,27 @@ import {
   ActionGroup,
   Button,
   FormGroup,
+  FormHelperText,
+  HelperText,
+  HelperTextItem,
   NumberInput,
   PageSection,
+  Switch,
+  Text,
+  TextInput,
+  TextVariants,
+} from "@patternfly/react-core";
+import {
   Select,
   SelectOption,
   SelectVariant,
-  Switch,
-  Text,
-  TextVariants,
-} from "@patternfly/react-core";
+} from "@patternfly/react-core/deprecated";
 import { useEffect, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { FormPanel, HelpItem } from "ui-shared";
+import { FormPanel, HelpItem } from "@keycloak/keycloak-ui-shared";
+
 import { FormAccess } from "../components/form/FormAccess";
-import { KeycloakTextInput } from "../components/keycloak-text-input/KeycloakTextInput";
 import {
   TimeSelector,
   toHumanFormat,
@@ -194,10 +200,35 @@ export const RealmSettingsTokensTab = ({
                   />
                 }
               >
-                <KeycloakTextInput
+                <TextInput
                   id="shortVerificationUri"
                   placeholder={t("shortVerificationUri")}
                   {...form.register("attributes.shortVerificationUri")}
+                />
+              </FormGroup>
+              <FormGroup
+                label={t("parRequestUriLifespan")}
+                fieldId="parRequestUriLifespan"
+                labelIcon={
+                  <HelpItem
+                    helpText={t("parRequestUriLifespanHelp")}
+                    fieldLabelId="parRequestUriLifespan"
+                  />
+                }
+              >
+                <Controller
+                  name="attributes.parRequestUriLifespan"
+                  control={form.control}
+                  render={({ field }) => (
+                    <TimeSelector
+                      id="parRequestUriLifespan"
+                      className="par-request-uri-lifespan"
+                      data-testid="par-request-uri-lifespan-input"
+                      aria-label="par-request-uri-lifespan"
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  )}
                 />
               </FormGroup>
             </>
@@ -211,7 +242,7 @@ export const RealmSettingsTokensTab = ({
         <FormAccess
           isHorizontal
           role="manage-realm"
-          className="pf-u-mt-lg"
+          className="pf-v5-u-mt-lg"
           onSubmit={form.handleSubmit(save)}
         >
           <FormGroup
@@ -283,15 +314,12 @@ export const RealmSettingsTokensTab = ({
         <FormAccess
           isHorizontal
           role="manage-realm"
-          className="pf-u-mt-lg"
+          className="pf-v5-u-mt-lg"
           onSubmit={form.handleSubmit(save)}
         >
           <FormGroup
             label={t("accessTokenLifespan")}
             fieldId="accessTokenLifespan"
-            helperText={t("recommendedSsoTimeout", {
-              time: toHumanFormat(ssoSessionIdleTimeout!, whoAmI.getLocale()),
-            })}
             labelIcon={
               <HelpItem
                 helpText={t("accessTokenLifespanHelp")}
@@ -318,6 +346,18 @@ export const RealmSettingsTokensTab = ({
                 />
               )}
             />
+            <FormHelperText>
+              <HelperText>
+                <HelperTextItem>
+                  {t("recommendedSsoTimeout", {
+                    time: toHumanFormat(
+                      ssoSessionIdleTimeout!,
+                      whoAmI.getLocale(),
+                    ),
+                  })}
+                </HelperTextItem>
+              </HelperText>
+            </FormHelperText>
           </FormGroup>
 
           <FormGroup
@@ -406,7 +446,7 @@ export const RealmSettingsTokensTab = ({
         <FormAccess
           isHorizontal
           role="manage-realm"
-          className="pf-u-mt-lg"
+          className="pf-v5-u-mt-lg"
           onSubmit={form.handleSubmit(save)}
         >
           <FormGroup

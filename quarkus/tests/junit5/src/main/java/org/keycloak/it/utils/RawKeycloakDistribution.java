@@ -36,17 +36,19 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -58,6 +60,9 @@ import javax.net.ssl.X509TrustManager;
 import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.fs.util.ZipUtils;
 
+import io.restassured.RestAssured;
+import org.awaitility.Awaitility;
+import org.jboss.logging.Logger;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.EmptyAsset;
 import org.jboss.shrinkwrap.api.exporter.ZipExporter;
@@ -65,6 +70,7 @@ import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.keycloak.common.Version;
 import org.keycloak.it.TestProvider;
 import org.keycloak.it.junit5.extension.CLIResult;
+import org.keycloak.quarkus.runtime.Environment;
 import org.keycloak.quarkus.runtime.cli.command.Build;
 import org.keycloak.quarkus.runtime.configuration.mappers.PropertyMapper;
 import org.keycloak.quarkus.runtime.configuration.mappers.PropertyMappers;
@@ -76,30 +82,32 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
 
     private static final int DEFAULT_SHUTDOWN_TIMEOUT_SECONDS = 10;
 
+    private static final Logger LOG = Logger.getLogger(RawKeycloakDistribution.class);
     private Process keycloak;
     private int exitCode = -1;
     private final Path distPath;
-    private final List<String> outputStream = new ArrayList<>();
-    private final List<String> errorStream = new ArrayList<>();
+    private final List<String> outputStream = Collections.synchronizedList(new ArrayList<>());
+    private final List<String> errorStream = Collections.synchronizedList(new ArrayList<>());
     private boolean manualStop;
     private String relativePath;
     private int httpPort;
     private int httpsPort;
-    private boolean debug;
-    private boolean enableTls;
-    private boolean reCreate;
-    private boolean removeBuildOptionsAfterBuild;
-    private boolean createAdminUser;
+    private final boolean debug;
+    private final boolean enableTls;
+    private final boolean reCreate;
+    private final boolean removeBuildOptionsAfterBuild;
+    private final int requestPort;
     private ExecutorService outputExecutor;
     private boolean inited = false;
-    private Map<String, String> envVars = new HashMap<>();
+    private final Map<String, String> envVars = new HashMap<>();
 
-    public RawKeycloakDistribution(boolean debug, boolean manualStop, boolean enableTls, boolean reCreate, boolean removeBuildOptionsAfterBuild) {
+    public RawKeycloakDistribution(boolean debug, boolean manualStop, boolean enableTls, boolean reCreate, boolean removeBuildOptionsAfterBuild, int requestPort) {
         this.debug = debug;
         this.manualStop = manualStop;
         this.enableTls = enableTls;
         this.reCreate = reCreate;
         this.removeBuildOptionsAfterBuild = removeBuildOptionsAfterBuild;
+        this.requestPort = requestPort;
         this.distPath = prepareDistribution();
     }
 
@@ -128,8 +136,8 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
             throw new RuntimeException("Failed to start the server", cause);
         } finally {
             if (arguments.contains(Build.NAME) && removeBuildOptionsAfterBuild) {
-                for (List<PropertyMapper> mappers : PropertyMappers.getBuildTimeMappers().values()) {
-                    for (PropertyMapper mapper : mappers) {
+                for (List<PropertyMapper<?>> mappers : PropertyMappers.getBuildTimeMappers().values()) {
+                    for (PropertyMapper<?> mapper : mappers) {
                         removeProperty(mapper.getFrom().substring(3));
                     }
                 }
@@ -139,6 +147,8 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
                 envVars.clear();
             }
         }
+
+        setRequestPort();
 
         return CLIResult.create(getOutputStream(), getErrorStream(), getExitCode());
     }
@@ -174,9 +184,9 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
             return;
         }
 
-        CompletableFuture allProcesses = CompletableFuture.completedFuture(null);
+        CompletableFuture<?> allProcesses = CompletableFuture.completedFuture(null);
 
-        for (ProcessHandle process : parent.descendants().collect(Collectors.toList())) {
+        for (ProcessHandle process : parent.descendants().toList()) {
             if (force) {
                 process.destroyForcibly();
             } else {
@@ -253,6 +263,34 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
         return allArgs.toArray(String[]::new);
     }
 
+    @Override
+    public void assertStopped() {
+        try {
+            if (keycloak != null) {
+                keycloak.onExit().get(DEFAULT_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException(e);
+        } catch (TimeoutException e) {
+            LOG.warn("Process did not exit as expected, will attempt a thread dump");
+            threadDump();
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Override
+    public void setRequestPort() {
+        setRequestPort(requestPort);
+    }
+
+    @Override
+    public void setRequestPort(int port) {
+        RestAssured.port = port;
+    }
+
     private void waitForReadiness() throws MalformedURLException {
         waitForReadiness("http", httpPort);
 
@@ -269,6 +307,7 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
 
         while (true) {
             if (System.currentTimeMillis() - startTime > getStartTimeout()) {
+                threadDump();
                 throw new IllegalStateException(
                         "Timeout [" + getStartTimeout() + "] while waiting for Quarkus server", ex);
             }
@@ -306,6 +345,22 @@ public final class RawKeycloakDistribution implements KeycloakDistribution {
                 }
             }
         }
+    }
+
+    private void threadDump() {
+        if (Environment.isWindows()) {
+            return;
+        }
+        try {
+            ProcessBuilder builder = new ProcessBuilder("kill", "-3", String.valueOf(keycloak.pid()));
+            Process p = builder.start();
+            p.onExit().get(getStartTimeout(), TimeUnit.MILLISECONDS);
+        } catch (Exception e) {
+            LOG.warn("A thread dump may not have been successfully triggered", e);
+            return;
+        }
+        Awaitility.await().atMost(1, TimeUnit.MINUTES)
+                .until(() -> getOutputStream().stream().anyMatch(s -> s.contains("JNI global refs")));
     }
 
     private long getStartTimeout() {

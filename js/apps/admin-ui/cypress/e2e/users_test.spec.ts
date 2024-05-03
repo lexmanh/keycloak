@@ -73,7 +73,7 @@ describe("User creation", () => {
 
     createUserPage.createUser(itemId);
 
-    createUserPage.save();
+    createUserPage.create();
 
     masthead.checkNotificationMessage("The user has been created");
   });
@@ -95,7 +95,7 @@ describe("User creation", () => {
 
     createUserPage.joinGroups();
 
-    createUserPage.save();
+    createUserPage.create();
 
     masthead.checkNotificationMessage("The user has been created");
   });
@@ -109,7 +109,7 @@ describe("User creation", () => {
     createUserPage.createUser(itemIdWithCred);
 
     userDetailsPage.fillUserData();
-    createUserPage.save();
+    createUserPage.create();
     masthead.checkNotificationMessage("The user has been created");
     sidebarPage.waitForPageLoad();
 
@@ -127,7 +127,7 @@ describe("User creation", () => {
 
   it("Search non-existing user test", () => {
     listingPage.searchItem("user_DNE");
-    cy.findByTestId(listingPage.emptyState).should("exist");
+    listingPage.assertNoResults();
   });
 
   it("User details test", () => {
@@ -162,6 +162,20 @@ describe("User creation", () => {
       .save();
 
     masthead.checkNotificationMessage("The user has been saved");
+
+    attributesTab
+      .addAttribute("LDAP_ID", "value_test")
+      .addAttribute("LDAP_ID", "another_value_test")
+      .addAttribute("c", "d")
+      .save();
+
+    masthead.checkNotificationMessage("The user has not been saved: ");
+
+    cy.get(".pf-v5-c-helper-text__item-text")
+      .filter(':contains("Update of read-only attribute rejected")')
+      .should("have.length", 2);
+
+    cy.reload();
 
     userDetailsPage.goToDetailsTab();
     attributesTab
@@ -421,7 +435,12 @@ describe("User creation", () => {
     credentialsPage.goToCredentialsTab();
 
     cy.wait(2000);
-    listingPage.deleteItem(itemCredential);
+    cy.get("table")
+      .contains(itemCredential)
+      .parentsUntil("tbody")
+      .find(".pf-v5-c-dropdown__toggle")
+      .click();
+    cy.get("table").contains("Delete").click();
     modalUtils.checkModalTitle("Delete credentials?").confirmModal();
 
     masthead.checkNotificationMessage(
@@ -493,7 +512,7 @@ describe("User creation", () => {
       createUserPage.goToCreateUser();
       createUserPage.createUser(a11yUser);
       userDetailsPage.fillUserData();
-      createUserPage.save();
+      createUserPage.create();
       cy.checkA11y();
     });
 

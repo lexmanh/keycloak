@@ -1,12 +1,14 @@
 import type UserSessionRepresentation from "@keycloak/keycloak-admin-client/lib/defs/userSessionRepresentation";
 import {
   Button,
+  Label,
   List,
   ListItem,
   ListVariant,
   ToolbarItem,
+  Tooltip,
 } from "@patternfly/react-core";
-import { CubesIcon } from "@patternfly/react-icons";
+import { CubesIcon, InfoCircleIcon } from "@patternfly/react-icons";
 import { MouseEvent, ReactNode, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useMatch, useNavigate } from "react-router-dom";
@@ -50,9 +52,24 @@ export type SessionsTableProps = {
 
 const UsernameCell = (row: UserSessionRepresentation) => {
   const { realm } = useRealm();
+  const { t } = useTranslation();
   return (
     <Link to={toUser({ realm, id: row.userId!, tab: "sessions" })}>
       {row.username}
+      {row.transientUser && (
+        <>
+          {" "}
+          <Tooltip content={t("transientUserTooltip")}>
+            <Label
+              data-testid="user-details-label-transient-user"
+              icon={<InfoCircleIcon />}
+              isCompact
+            >
+              {t("transientUser")}
+            </Label>
+          </Tooltip>
+        </>
+      )}
     </Link>
   );
 };
@@ -146,13 +163,32 @@ export default function SessionsTable({
     },
   });
 
+  async function onClickRevoke(
+    event: MouseEvent,
+    rowIndex: number,
+    rowData: IRowData,
+  ) {
+    const session = rowData.data as UserSessionRepresentation;
+    await adminClient.realms.deleteSession({
+      realm,
+      session: session.id!,
+      isOffline: true,
+    });
+
+    refresh();
+  }
+
   async function onClickSignOut(
     event: MouseEvent,
     rowIndex: number,
     rowData: IRowData,
   ) {
     const session = rowData.data as UserSessionRepresentation;
-    await adminClient.realms.deleteSession({ realm, session: session.id! });
+    await adminClient.realms.deleteSession({
+      realm,
+      session: session.id!,
+      isOffline: false,
+    });
 
     if (session.userId === whoAmI.getUserId()) {
       await keycloak.logout({ redirectUri: "" });
@@ -185,8 +221,16 @@ export default function SessionsTable({
         }
         columns={columns}
         actionResolver={(rowData: IRowData) => {
-          if (rowData.data.type === "OFFLINE") {
-            return [];
+          if (
+            rowData.data.type === "Offline" ||
+            rowData.data.type === "OFFLINE"
+          ) {
+            return [
+              {
+                title: t("revoke"),
+                onClick: onClickRevoke,
+              } as Action<UserSessionRepresentation>,
+            ];
           }
           return [
             {

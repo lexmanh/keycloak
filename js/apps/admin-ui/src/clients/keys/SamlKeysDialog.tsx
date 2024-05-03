@@ -21,7 +21,7 @@ import { saveAs } from "file-saver";
 import { useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { HelpItem } from "ui-shared";
+import { HelpItem } from "@keycloak/keycloak-ui-shared";
 
 import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
@@ -114,7 +114,7 @@ export const SamlKeysDialog = ({
   return (
     <Modal
       variant={ModalVariant.medium}
-      aria-labelledby={t("enableClientSignatureRequired")}
+      aria-label={t("enableClientSignatureRequiredModal")}
       header={
         <TextContent>
           <Title headingLevel="h1">{t("enableClientSignatureRequired")}</Title>

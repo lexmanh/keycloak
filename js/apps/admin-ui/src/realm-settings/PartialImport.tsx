@@ -19,14 +19,16 @@ import {
   Label,
   Modal,
   ModalVariant,
-  Select,
-  SelectOption,
-  SelectOptionObject,
   Stack,
   StackItem,
   Text,
   TextContent,
 } from "@patternfly/react-core";
+import {
+  Select,
+  SelectOption,
+  SelectOptionObject,
+} from "@patternfly/react-core/deprecated";
 import {
   ChangeEvent,
   FormEvent,
@@ -231,7 +233,9 @@ export const PartialImportDialog = (props: PartialImportProps) => {
                   aria-labelledby={`${resource}-checkbox`}
                   name={resource}
                   isChecked={resourcesToImport[resource]}
-                  onChange={handleResourceCheckBox}
+                  onChange={(event, checked: boolean) =>
+                    handleResourceCheckBox(checked, event)
+                  }
                   data-testid={resource + "-checkbox"}
                 />
               </DataListCell>,
@@ -338,6 +342,8 @@ export const PartialImportDialog = (props: PartialImportProps) => {
                   <Select
                     toggleId="realm-selector"
                     isOpen={isRealmSelectOpen}
+                    typeAheadAriaLabel={t("realmSelector")}
+                    aria-label={"realmSelector"}
                     onToggle={() => setIsRealmSelectOpen(!isRealmSelectOpen)}
                     onSelect={(_, value) => handleRealmSelect(value)}
                     placeholderText={targetRealm.realm || targetRealm.id}
@@ -466,7 +472,12 @@ export const PartialImportDialog = (props: PartialImportProps) => {
           </Button>,
         ]}
       >
-        <Alert variant="success" isInline title={importCompleteMessage()} />
+        <Alert
+          variant="success"
+          component="p"
+          isInline
+          title={importCompleteMessage()}
+        />
         <KeycloakDataTable
           loader={loader}
           isPaginated

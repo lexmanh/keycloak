@@ -25,6 +25,8 @@ import org.keycloak.authentication.FormAction;
 import org.keycloak.authentication.FormActionFactory;
 import org.keycloak.authentication.FormContext;
 import org.keycloak.authentication.ValidationContext;
+import org.keycloak.authentication.requiredactions.TermsAndConditions;
+import org.keycloak.common.util.Time;
 import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventType;
@@ -33,6 +35,7 @@ import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.RequiredActionProviderModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
@@ -137,6 +140,17 @@ public class RegistrationUserCreation implements FormAction, FormActionFactory {
 
         user.setEnabled(true);
 
+        if ("on".equals(formData.getFirst(RegistrationTermsAndConditions.FIELD))) {
+            // if accepted terms and conditions checkbox, remove action and add the attribute if enabled
+            RequiredActionProviderModel tacModel = context.getRealm().getRequiredActionProviderByAlias(
+                    UserModel.RequiredAction.TERMS_AND_CONDITIONS.name());
+            if (tacModel != null && tacModel.isEnabled()) {
+                user.setSingleAttribute(TermsAndConditions.USER_ATTRIBUTE, Integer.toString(Time.currentTime()));
+                context.getAuthenticationSession().removeRequiredAction(UserModel.RequiredAction.TERMS_AND_CONDITIONS);
+                user.removeRequiredAction(UserModel.RequiredAction.TERMS_AND_CONDITIONS);
+            }
+        }
+
         context.setUser(user);
 
         context.getAuthenticationSession().setClientNote(OIDCLoginProtocol.LOGIN_HINT_PARAM, username);
@@ -233,6 +247,8 @@ public class RegistrationUserCreation implements FormAction, FormActionFactory {
     private MultivaluedMap<String, String> normalizeFormParameters(MultivaluedMap<String, String> formParams) {
         MultivaluedHashMap<String, String> copy = new MultivaluedHashMap<>(formParams);
 
+        // Remove google recaptcha form property to avoid length errors
+        copy.remove(RegistrationPage.FIELD_RECAPTCHA_RESPONSE);
         // Remove "password" and "password-confirm" to avoid leaking them in the user-profile data
         copy.remove(RegistrationPage.FIELD_PASSWORD);
         copy.remove(RegistrationPage.FIELD_PASSWORD_CONFIRM);

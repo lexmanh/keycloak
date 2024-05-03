@@ -24,7 +24,6 @@ import static org.keycloak.services.resources.LoginActionsService.SESSION_CODE;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.NoCache;
 import org.keycloak.http.HttpRequest;
-import org.keycloak.Config;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.TokenVerifier;
@@ -63,12 +62,12 @@ import org.keycloak.services.ErrorPage;
 import org.keycloak.services.ErrorResponseException;
 import org.keycloak.services.clientpolicy.ClientPolicyException;
 import org.keycloak.services.clientpolicy.context.LogoutRequestContext;
+import org.keycloak.services.cors.Cors;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.managers.AuthenticationSessionManager;
 import org.keycloak.services.managers.ClientSessionCode;
 import org.keycloak.services.managers.UserSessionManager;
 import org.keycloak.services.messages.Messages;
-import org.keycloak.services.resources.Cors;
 import org.keycloak.services.resources.LogoutSessionCodeChecks;
 import org.keycloak.services.resources.SessionCodeChecks;
 import org.keycloak.services.util.LocaleUtil;
@@ -115,9 +114,6 @@ public class LogoutEndpoint {
     private final EventBuilder event;
     private final OIDCProviderConfig providerConfig;
 
-    // When enabled we cannot search offline sessions by brokerSessionId. We need to search by federated userId and then filter by brokerSessionId.
-    private final boolean offlineSessionsLazyLoadingEnabled;
-
     private Cors cors;
 
     public LogoutEndpoint(KeycloakSession session, TokenManager tokenManager, EventBuilder event, OIDCProviderConfig providerConfig) {
@@ -127,7 +123,6 @@ public class LogoutEndpoint {
         this.realm = session.getContext().getRealm();
         this.event = event;
         this.providerConfig = providerConfig;
-        this.offlineSessionsLazyLoadingEnabled = !Config.scope("userSessions").scope("infinispan").getBoolean("preloadOfflineSessionsFromDatabase", false);
         this.request = session.getContext().getHttpRequest();
         this.headers = session.getContext().getRequestHeaders();
     }
@@ -367,10 +362,7 @@ public class LogoutEndpoint {
             logger.debugf("Failed verification during logout. logoutSessionId=%s, clientId=%s, tabId=%s",
                     logoutSession != null ? logoutSession.getParentSession().getId() : "unknown", clientId, tabId);
 
-            if (logoutSession == null || logoutSession.getClient().equals(SystemClientUtil.getSystemClient(logoutSession.getRealm()))) {
-                // Cleanup system client URL to avoid links to account management
-                session.getProvider(LoginFormsProvider.class).setAttribute(Constants.SKIP_LINK, true);
-            }
+            SystemClientUtil.checkSkipLink(session, logoutSession);
 
             event.error(Errors.SESSION_EXPIRED);
 
@@ -401,11 +393,7 @@ public class LogoutEndpoint {
         if (logoutSession == null) {
             logger.debugf("Failed verification when changing locale logout. clientId=%s, tabId=%s", clientId, tabId);
 
-            LoginFormsProvider loginForm = session.getProvider(LoginFormsProvider.class);
-            if (clientId == null || clientId.equals(SystemClientUtil.getSystemClient(realm).getClientId())) {
-                // Cleanup system client URL to avoid links to account management
-                loginForm.setAttribute(Constants.SKIP_LINK, true);
-            }
+            SystemClientUtil.checkSkipLink(session, logoutSession);
 
             AuthenticationManager.AuthResult authResult = AuthenticationManager.authenticateIdentityCookie(session, realm, false);
             if (authResult != null) {
@@ -413,7 +401,7 @@ public class LogoutEndpoint {
                 return ErrorPage.error(session, logoutSession, Response.Status.BAD_REQUEST, Messages.FAILED_LOGOUT);
             } else {
                 // Probably changing locale on logout screen after logout was already performed. If there is no session in the browser, we can just display that logout was already finished
-                return loginForm.setSuccess(Messages.SUCCESS_LOGOUT).createInfoPage();
+                return session.getProvider(LoginFormsProvider.class).setSuccess(Messages.SUCCESS_LOGOUT).createInfoPage();
             }
         }
 
@@ -445,6 +433,7 @@ public class LogoutEndpoint {
                 }
             } catch (OAuthErrorException e) {
                 event.event(EventType.LOGOUT);
+                event.detail(Details.REASON, e.getDescription());
                 event.error(Errors.INVALID_TOKEN);
                 return ErrorPage.error(session, null, Response.Status.BAD_REQUEST, Messages.SESSION_NOT_ACTIVE);
             }
@@ -535,15 +524,17 @@ public class LogoutEndpoint {
             }
 
             if (userSessionModel != null) {
-                checkTokenIssuedAt(token.getIssuedAt(), userSessionModel);
+                checkTokenIssuedAt(token.getIat(), userSessionModel);
                 logout(userSessionModel, offline);
             }
         } catch (OAuthErrorException e) {
             // KEYCLOAK-6771 Certificate Bound Token
             if (MtlsHoKTokenUtil.CERT_VERIFY_ERROR_DESC.equals(e.getDescription())) {
+                event.detail(Details.REASON, e.getDescription());
                 event.error(Errors.NOT_ALLOWED);
                 throw new CorsErrorResponseException(cors, e.getError(), e.getDescription(), Response.Status.UNAUTHORIZED);
             } else {
+                event.detail(Details.REASON, e.getDescription());
                 event.error(Errors.INVALID_TOKEN);
                 throw new CorsErrorResponseException(cors, e.getError(), e.getDescription(), Response.Status.BAD_REQUEST);
             }
@@ -634,11 +625,7 @@ public class LogoutEndpoint {
             UserSessionModel userSession = session.sessions().getUserSessionByBrokerSessionId(realm, identityProviderAlias + "." + sessionId);
 
             if (logoutOfflineSessions) {
-                if (offlineSessionsLazyLoadingEnabled) {
-                    logoutOfflineUserSessionByBrokerUserId(identityProviderAlias + "." + federatedUserId, identityProviderAlias + "." + sessionId);
-                } else {
-                    logoutOfflineUserSession(identityProviderAlias + "." + sessionId);
-                }
+                logoutOfflineUserSessionByBrokerUserId(identityProviderAlias + "." + federatedUserId, identityProviderAlias + "." + sessionId);
             }
 
             if (userSession != null) {
@@ -647,14 +634,6 @@ public class LogoutEndpoint {
         });
 
         return backchannelLogoutResponse.get();
-    }
-
-    private void logoutOfflineUserSession(String brokerSessionId) {
-        UserSessionModel offlineUserSession =
-                session.sessions().getOfflineUserSessionByBrokerSessionId(realm, brokerSessionId);
-        if (offlineUserSession != null) {
-            new UserSessionManager(session).revokeOfflineUserSession(offlineUserSession);
-        }
     }
 
     private BackchannelLogoutResponse backchannelLogoutFederatedUserId(String federatedUserId,
@@ -748,7 +727,7 @@ public class LogoutEndpoint {
         }
     }
 
-    private void checkTokenIssuedAt(int idTokenIssuedAt, UserSessionModel userSession) throws OAuthErrorException {
+    private void checkTokenIssuedAt(long idTokenIssuedAt, UserSessionModel userSession) throws OAuthErrorException {
         if (idTokenIssuedAt + 1 < userSession.getStarted()) {
             throw new OAuthErrorException(OAuthErrorException.INVALID_GRANT, "Toked issued before the user session started");
         }

@@ -44,7 +44,7 @@ export default class AttributesTab {
     cy.findByTestId(this.#keyInput).should((exist ? "" : "not.") + "exist");
 
     if (exist) {
-      cy.findAllByTestId(this.#keyInput).invoke("val").should("eq", "key_test");
+      cy.findAllByTestId(this.#keyInput).invoke("val").should("eq", key);
     }
 
     return this;
@@ -56,7 +56,7 @@ export default class AttributesTab {
   }
 
   public revert() {
-    cy.get(".pf-c-button.pf-m-link").contains("Revert").click();
+    cy.get(".pf-v5-c-button.pf-m-link").contains("Revert").click();
     return this;
   }
 

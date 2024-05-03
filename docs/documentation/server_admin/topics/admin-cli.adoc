@@ -192,6 +192,13 @@ In this example, you start a session authenticated as the `admin` user in the `m
 
 The `create` and `update` commands send a JSON body to the server. You can use `-f FILENAME` to read a pre-made document from a file. When you can use the `-f -` option, {project_name} reads the message body from the standard input. You can specify individual attributes and their values, as seen in the `create users` example. {project_name} composes the attributes into a JSON body and sends them to the server.
 
+[NOTE]
+====
+The value in name=value pairs used in --set, -s options, are assumed to be JSON. If it cannot be parsed as valid JSON, then it will be sent to the server as a text value. 
+
+If the value is enclosed in quotes after shell processing, but is not valid JSON, the quotes will be stripped and the rest of the value will be sent as text. This behavior is deprecated, please consider specifying your value without qoutes or a valid JSON string literal with double quotes.
+====
+
 Several methods are available in {project_name} to update a resource using the `update` command. You can determine the current state of a resource and save it to a file, edit that file, and send it to the server for an update.
 
 For example:
@@ -1024,15 +1031,15 @@ You can filter users by `username`, `firstName`, `lastName`, or `email`.
 For example:
 [options="nowrap"]
 ----
-$ kcadm.sh get users -r demorealm -q email=google.com
-$ kcadm.sh get users -r demorealm -q username=testuser
+$ kcadm.sh get users -r demorealm -q q=email:google.com
+$ kcadm.sh get users -r demorealm -q q=username:testuser
 ----
 [NOTE]
 ====
 Filtering does not use exact matching. This example matches the value of the `username` attribute against the `\*testuser*` pattern.
 ====
 
-You can filter across multiple attributes by specifying multiple `-q` options. {project_name} returns users that match the condition for all the attributes only.
+For clients, groups, and users you can filter across multiple attributes by specifying a more complex `q` query parameter.  you may use something like -q q="field1:value1 field2:value2". {project_name} returns users that match the condition for all the attributes only.
 
 [discrete]
 ==== Getting a specific user
@@ -1778,7 +1785,7 @@ $ kcadm.sh create components -r demorealm -s name=full-name-ldap-mapper -s provi
 . Set the realm's `passwordPolicy` attribute to an enumeration expression that includes the specific policy provider ID and optional configuration.
 . Use the following example to set a password policy to default values. The default values include:
 
-* 27,500 hashing iterations
+* 210,000 hashing iterations
 * at least one special character
 * at least one uppercase character
 * at least one digit character
@@ -1792,7 +1799,7 @@ $ kcadm.sh update realms/demorealm -s 'passwordPolicy="hashIterations and specia
 . To use values different from defaults, pass the configuration in brackets.
 . Use the following example to set a password policy to:
 
-* 25,000 hash iterations
+* 300,000 hash iterations
 * at least two special characters
 * at least two uppercase characters
 * at least two lowercase characters
@@ -1803,7 +1810,7 @@ $ kcadm.sh update realms/demorealm -s 'passwordPolicy="hashIterations and specia
 +
 [options="nowrap"]
 ----
-$ kcadm.sh update realms/demorealm -s 'passwordPolicy="hashIterations(25000) and specialChars(2) and upperCase(2) and lowerCase(2) and digits(2) and length(9) and notUsername and passwordHistory(4)"'
+$ kcadm.sh update realms/demorealm -s 'passwordPolicy="hashIterations(300000) and specialChars(2) and upperCase(2) and lowerCase(2) and digits(2) and length(9) and notUsername and passwordHistory(4)"'
 ----
 
 [discrete]

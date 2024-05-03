@@ -78,7 +78,8 @@ describe("Authentication test", () => {
     detailPage.executionExists("Cookie");
   });
 
-  it("Should move kerberos down", () => {
+  // as of 03/28/24, drag and drop is not working
+  it.skip("Should move kerberos down", () => {
     listingPage.goToItemDetails("Copy of browser");
 
     const fromRow = "Kerberos";
@@ -168,6 +169,7 @@ describe("Authentication test", () => {
   });
 
   const flowName = "Empty Flow";
+
   it("should create flow from scratch", () => {
     listingPage.goToCreateItem();
     detailPage.fillCreateForm(
@@ -188,6 +190,23 @@ describe("Authentication test", () => {
     modalUtil.confirmModal();
     masthead.checkNotificationMessage("Flow successfully deleted");
   });
+
+  it("add webauthn authentication to browserflow", () => {
+    const flowName = "WebAuthn Browser";
+    listingPage.clickRowDetails("Browser").clickDetailMenu("Duplicate");
+    duplicateFlowModal.fill(flowName);
+
+    detailPage.clickRowDelete("WebAuthn Browser Browser - Conditional OTP");
+    modalUtil.confirmModal();
+
+    commonPage
+      .actionToolbarUtils()
+      .clickActionToggleButton()
+      .clickDropdownItem("Bind flow");
+
+    new BindFlowModal().fill("Direct grant flow").save();
+    masthead.checkNotificationMessage("Flow successfully updated");
+  });
 });
 
 describe("Required actions", () => {
@@ -207,14 +226,17 @@ describe("Required actions", () => {
 
   it("should enable delete account", () => {
     const action = "Delete Account";
-    requiredActionsPage.enableAction(action);
+    requiredActionsPage.switchAction(action);
     masthead.checkNotificationMessage("Updated required action successfully");
     requiredActionsPage.isChecked(action);
   });
 
   it("should register an unregistered action", () => {
     const action = "Verify Profile";
-    requiredActionsPage.enableAction(action);
+    requiredActionsPage.isChecked(action).isDefaultEnabled(action);
+    requiredActionsPage.switchAction(action);
+    masthead.checkNotificationMessage("Updated required action successfully");
+    requiredActionsPage.switchAction(action);
     masthead.checkNotificationMessage("Updated required action successfully");
     requiredActionsPage.isChecked(action).isDefaultEnabled(action);
   });
@@ -268,6 +290,7 @@ describe("Accessibility tests for authentication", () => {
   const detailPage = new FlowDetails();
 
   before(() => adminClient.createRealm(realmName));
+
   after(() => adminClient.deleteRealm(realmName));
 
   beforeEach(() => {

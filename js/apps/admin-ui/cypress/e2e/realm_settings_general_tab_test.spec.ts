@@ -45,16 +45,17 @@ describe("Realm settings general tab tests", () => {
 
     // Enable realm
     realmSettingsPage.toggleSwitch(`${realmName}-switch`);
-    masthead.checkNotificationMessage("Realm successfully updated", true);
+    masthead.checkNotificationMessage("Realm successfully updated");
+    sidebarPage.waitForPageLoad();
 
     // Disable realm
-    realmSettingsPage.toggleSwitch(`${realmName}-switch`);
+    const loadName = `load-disabled-${uuid()}`;
+    cy.intercept({ path: "/admin/realms/*", times: 1 }).as(loadName);
+    realmSettingsPage.toggleSwitch(`${realmName}-switch`, false);
     realmSettingsPage.disableRealm();
     masthead.checkNotificationMessage("Realm successfully updated", true);
-
-    // Sometimes it takes the Keycloak server a while to disable the realm, even though the notification message has been displayed.
-    // To prevent flaky tests, we wait a second before continuing.
-    cy.wait(1000);
+    cy.wait(`@${loadName}`);
+    sidebarPage.waitForPageLoad();
 
     // Re-enable realm
     realmSettingsPage.toggleSwitch(`${realmName}-switch`);
@@ -65,7 +66,7 @@ describe("Realm settings general tab tests", () => {
     sidebarPage.goToRealmSettings();
     realmSettingsPage.clearRealmId();
     realmSettingsPage.saveGeneral();
-    cy.get("#kc-realm-id-helper").should("have.text", "Required field");
+    cy.findByTestId("realm-id-error").should("have.text", "Required field");
   });
 
   it("Modify Display name", () => {

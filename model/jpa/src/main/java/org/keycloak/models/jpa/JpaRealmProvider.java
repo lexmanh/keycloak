@@ -43,6 +43,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.hibernate.Session;
 import org.jboss.logging.Logger;
+import org.keycloak.client.clienttype.ClientTypeManager;
+import org.keycloak.common.Profile;
 import org.keycloak.common.util.Time;
 import org.keycloak.connections.jpa.util.JpaUtils;
 import org.keycloak.migration.MigrationModel;
@@ -290,13 +292,14 @@ public class JpaRealmProvider implements RealmProvider, ClientProvider, ClientSc
         TypedQuery<Map> query = em.createNamedQuery("getAllRedirectUrisOfEnabledClients", Map.class);
         query.setParameter("realm", realm.getId());
         return closing(query.getResultStream()
-          .filter(s -> s.get("client") != null))
-          .collect(
-            Collectors.groupingBy(
-              s -> new ClientAdapter(realm, em, session, (ClientEntity) s.get("client")),
-              Collectors.mapping(s -> (String) s.get("redirectUri"), Collectors.toSet())
-            )
-          );
+                .filter(s -> s.get("client") != null))
+                .collect(
+                        Collectors.groupingBy(
+                                s -> toClientModel(realm, (ClientEntity) s.get("client")),
+                                Collectors.mapping(s -> (String) s.get("redirectUri"), Collectors.toSet())
+                        )
+                );
+
     }
 
     @Override
@@ -480,7 +483,7 @@ public class JpaRealmProvider implements RealmProvider, ClientProvider, ClientSc
         GroupEntity groupEntity = em.find(GroupEntity.class, id);
         if (groupEntity == null) return null;
         if (!groupEntity.getRealm().equals(realm.getId())) return null;
-        GroupAdapter adapter =  new GroupAdapter(realm, em, groupEntity);
+        GroupAdapter adapter =  new GroupAdapter(session, realm, em, groupEntity);
         return adapter;
     }
 
@@ -647,7 +650,7 @@ public class JpaRealmProvider implements RealmProvider, ClientProvider, ClientSc
         Stream<GroupEntity> results = paginateQuery(query, firstResult, maxResults).getResultStream();
 
         return closing(results
-        		.map(g -> (GroupModel) new GroupAdapter(realm, em, g))
+                .map(g -> (GroupModel) new GroupAdapter(session, realm, em, g))
                 .sorted(GroupModel.COMPARE_BY_NAME));
     }
 
@@ -730,7 +733,7 @@ public class JpaRealmProvider implements RealmProvider, ClientProvider, ClientSc
         em.persist(groupEntity);
         em.flush();
 
-        return new GroupAdapter(realm, em, groupEntity);
+        return new GroupAdapter(session, realm, em, groupEntity);
     }
 
     @Override
@@ -755,6 +758,8 @@ public class JpaRealmProvider implements RealmProvider, ClientProvider, ClientSc
 
     @Override
     public ClientModel addClient(RealmModel realm, String id, String clientId) {
+        ClientModel resource;
+
         if (id == null) {
             id = KeycloakModelUtils.generateId();
         }
@@ -773,7 +778,7 @@ public class JpaRealmProvider implements RealmProvider, ClientProvider, ClientSc
         entity.setRealmId(realm.getId());
         em.persist(entity);
 
-        final ClientModel resource = new ClientAdapter(realm, em, session, entity);
+        resource = toClientModel(realm, entity);
 
         session.getKeycloakSessionFactory().publish((ClientModel.ClientCreationEvent) () -> resource);
         return resource;
@@ -810,9 +815,18 @@ public class JpaRealmProvider implements RealmProvider, ClientProvider, ClientSc
         ClientEntity client = em.find(ClientEntity.class, id);
         // Check if client belongs to this realm
         if (client == null || !realm.getId().equals(client.getRealmId())) return null;
-        ClientAdapter adapter = new ClientAdapter(realm, em, session, client);
-        return adapter;
+        return toClientModel(realm, client);
+    }
 
+    private ClientModel toClientModel(RealmModel realm, ClientEntity client) {
+        ClientAdapter adapter = new ClientAdapter(realm, em, session, client);
+
+        if (Profile.isFeatureEnabled(Profile.Feature.CLIENT_TYPES)) {
+            ClientTypeManager mgr = session.getProvider(ClientTypeManager.class);
+            return mgr.augmentClient(adapter);
+        } else {
+            return adapter;
+        }
     }
 
     @Override
@@ -864,19 +878,25 @@ public class JpaRealmProvider implements RealmProvider, ClientProvider, ClientSc
 
             Predicate attrNamePredicate = builder.equal(attributeJoin.get("name"), key);
 
-            Predicate attrValuePredicate;
             if (dbProductName.equals("Oracle")) {
                 // SELECT * FROM client_attributes WHERE ... DBMS_LOB.COMPARE(value, '0') = 0 ...;
                 // Oracle is not able to compare a CLOB with a VARCHAR unless it being converted with TO_CHAR
                 // But for this all values in the table need to be smaller than 4K, otherwise the cast will fail with
                 // "ORA-22835: Buffer too small for CLOB to CHAR" (even if it is in another row).
                 // This leaves DBMS_LOB.COMPARE as the option to compare the CLOB with the value.
-                attrValuePredicate = builder.equal(builder.function("DBMS_LOB.COMPARE", Integer.class, attributeJoin.get("value"), builder.literal(value)), 0);
+                Predicate attrValuePredicate = builder.equal(builder.function("DBMS_LOB.COMPARE", Integer.class, attributeJoin.get("value"), builder.literal(value)), 0);
+                predicates.add(builder.and(attrNamePredicate, attrValuePredicate));
+            } else if (dbProductName.equals("PostgreSQL")) {
+                // use the substr comparison and the full comparison in postgresql
+                Predicate attrValuePredicate1 = builder.equal(
+                        builder.function("substr", Integer.class, attributeJoin.get("value"), builder.literal(1), builder.literal(255)),
+                        builder.function("substr", Integer.class, builder.literal(value), builder.literal(1), builder.literal(255)));
+                Predicate attrValuePredicate2 =  builder.equal(attributeJoin.get("value"), value);
+                predicates.add(builder.and(attrNamePredicate, attrValuePredicate1, attrValuePredicate2));
             } else {
-                attrValuePredicate = builder.equal(attributeJoin.get("value"), value);
+                Predicate attrValuePredicate = builder.equal(attributeJoin.get("value"), value);
+                predicates.add(builder.and(attrNamePredicate, attrValuePredicate));
             }
-
-            predicates.add(builder.and(attrNamePredicate, attrValuePredicate));
         }
 
         Predicate finalPredicate = builder.and(predicates.toArray(new Predicate[0]));
@@ -1149,7 +1169,7 @@ public class JpaRealmProvider implements RealmProvider, ClientProvider, ClientSc
 
         TypedQuery<GroupEntity> query = em.createQuery(queryBuilder);
         return closing(paginateQuery(query, firstResult, maxResults).getResultStream())
-                .map(g -> new GroupAdapter(realm, em, g));
+                .map(g -> new GroupAdapter(session, realm, em, g));
     }
 
     @Override

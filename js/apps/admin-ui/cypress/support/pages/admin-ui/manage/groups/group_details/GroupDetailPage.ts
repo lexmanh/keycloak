@@ -19,8 +19,8 @@ export default class GroupDetailPage extends GroupPage {
   #memberUsernameColumn = 'tbody > tr > [data-label="Username"]';
   #actionDrpDwnItemRenameGroup = "renameGroupAction";
   #actionDrpDwnItemDeleteGroup = "deleteGroup";
-  #headerGroupName = ".pf-l-level.pf-m-gutter";
-  #renameGroupModalGroupNameInput = "groupNameInput";
+  #headerGroupName = ".pf-v5-l-level.pf-m-gutter";
+  #renameGroupModalGroupNameInput = "name";
   #renameGroupModalRenameBtn = "renameGroup";
   #permissionSwitch = "permissionSwitch";
 

@@ -3,18 +3,20 @@ import {
   ActionGroup,
   Button,
   FormGroup,
-  Select,
-  SelectOption,
-  SelectVariant,
   Switch,
   Tab,
   TabTitleText,
   Tabs,
 } from "@patternfly/react-core";
+import {
+  Select,
+  SelectOption,
+  SelectVariant,
+} from "@patternfly/react-core/deprecated";
 import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { HelpItem } from "ui-shared";
+import { HelpItem } from "@keycloak/keycloak-ui-shared";
 import { FormAccess } from "../../components/form/FormAccess";
 import { useServerInfo } from "../../context/server-info/ServerInfoProvider";
 import { useWhoAmI } from "../../context/whoami/WhoAmI";
@@ -26,9 +28,14 @@ import { RealmOverrides } from "./RealmOverrides";
 type LocalizationTabProps = {
   save: (realm: RealmRepresentation) => void;
   realm: RealmRepresentation;
+  tableData: Record<string, string>[] | undefined;
 };
 
-export const LocalizationTab = ({ save, realm }: LocalizationTabProps) => {
+export const LocalizationTab = ({
+  save,
+  realm,
+  tableData,
+}: LocalizationTabProps) => {
   const { t } = useTranslation();
   const { whoAmI } = useWhoAmI();
 
@@ -68,6 +75,12 @@ export const LocalizationTab = ({ save, realm }: LocalizationTabProps) => {
     defaultValue: realm.internationalizationEnabled,
   });
 
+  const defaultLocales = useWatch({
+    name: "defaultLocale",
+    control,
+    defaultValue: realm.defaultLocale ? [realm.defaultLocale] : [],
+  });
+
   return (
     <Tabs
       activeKey={activeTab}
@@ -82,7 +95,7 @@ export const LocalizationTab = ({ save, realm }: LocalizationTabProps) => {
         <FormAccess
           isHorizontal
           role="manage-realm"
-          className="pf-u-mt-lg pf-u-ml-md"
+          className="pf-v5-u-mt-lg pf-v5-u-ml-md"
           onSubmit={handleSubmit(save)}
         >
           <FormGroup
@@ -102,7 +115,7 @@ export const LocalizationTab = ({ save, realm }: LocalizationTabProps) => {
               render={({ field }) => (
                 <Switch
                   id="kc-l-internationalization"
-                  className="pf-u-mt-sm"
+                  className="pf-v5-u-mt-sm"
                   label={t("enabled")}
                   labelOff={t("disabled")}
                   isChecked={field.value}
@@ -130,7 +143,7 @@ export const LocalizationTab = ({ save, realm }: LocalizationTabProps) => {
                   render={({ field }) => (
                     <Select
                       toggleId="kc-l-supported-locales"
-                      onToggle={(open) => {
+                      onToggle={(_event, open) => {
                         setSupportedLocalesOpen(open);
                       }}
                       onSelect={(_, v) => {
@@ -231,43 +244,25 @@ export const LocalizationTab = ({ save, realm }: LocalizationTabProps) => {
       <Tab
         id="realm-overrides"
         eventKey={1}
-        title={
-          <TabTitleText>
-            {t("realmOverrides")}{" "}
-            <HelpItem
-              fieldLabelId="realm-overrides"
-              helpText={t("realmOverridesHelp")}
-              noVerticalAlign={false}
-              unWrap
-            />
-          </TabTitleText>
-        }
+        title={<TabTitleText>{t("realmOverrides")} </TabTitleText>}
         data-testid="rs-localization-realm-overrides-tab"
       >
         <RealmOverrides
           internationalizationEnabled={internationalizationEnabled}
           watchSupportedLocales={watchSupportedLocales}
           realm={realm}
+          tableData={tableData}
         />
       </Tab>
       <Tab
         id="effective-message-bundles"
         eventKey={2}
-        title={
-          <TabTitleText>
-            {t("effectiveMessageBundles")}
-            <HelpItem
-              fieldLabelId="effective-message-bundles"
-              helpText={t("effectiveMessageBundlesHelp")}
-              noVerticalAlign={false}
-              unWrap
-            />
-          </TabTitleText>
-        }
+        title={<TabTitleText>{t("effectiveMessageBundles")}</TabTitleText>}
         data-testid="rs-localization-effective-message-bundles-tab"
       >
         <EffectiveMessageBundles
           defaultSupportedLocales={defaultSupportedLocales}
+          defaultLocales={defaultLocales}
         />
       </Tab>
     </Tabs>

@@ -14,7 +14,7 @@ import { capitalize } from "lodash-es";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { FormPanel } from "ui-shared";
+import { FormPanel } from "@keycloak/keycloak-ui-shared";
 import { adminClient } from "../admin-client";
 import { useAlerts } from "../components/alert/Alerts";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
@@ -184,7 +184,7 @@ export const UserIdentityProviderLinks = ({
         />
       )}
       <UnlinkConfirm />
-      <PageSection variant="light" className="pf-u-p-0">
+      <PageSection variant="light" className="pf-v5-u-p-0">
         <FormPanel title={t("linkedIdPs")} className="kc-linked-idps">
           <TextContent>
             <Text className="kc-available-idps-text">

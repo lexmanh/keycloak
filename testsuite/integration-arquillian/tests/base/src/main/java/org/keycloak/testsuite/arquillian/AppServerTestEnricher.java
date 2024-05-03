@@ -73,7 +73,7 @@ public class AppServerTestEnricher {
 
     private static final Logger log = Logger.getLogger(AppServerTestEnricher.class);
 
-    public static final String CURRENT_APP_SERVER = System.getProperty("app.server", "wildfly");
+    public static final String CURRENT_APP_SERVER = System.getProperty("app.server", "disabled");
     public static final boolean APP_SERVER_SSL_REQUIRED = Boolean.parseBoolean(System.getProperty("app.server.ssl.required", "false"));
 
     @Inject private Instance<ContainerController> containerConrollerInstance;
@@ -365,10 +365,6 @@ public class AppServerTestEnricher {
 
     public static boolean isWildfly9AppServer() {
         return CURRENT_APP_SERVER.equals("wildfly9");
-    }
-
-    public static boolean isTomcatAppServer() {
-        return CURRENT_APP_SERVER.startsWith("tomcat");
     }
 
     public static boolean isEAP6AppServer() {

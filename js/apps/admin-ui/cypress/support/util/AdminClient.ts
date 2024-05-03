@@ -6,7 +6,7 @@ import type RoleRepresentation from "@keycloak/keycloak-admin-client/lib/defs/ro
 import type { RoleMappingPayload } from "@keycloak/keycloak-admin-client/lib/defs/roleRepresentation";
 import type { UserProfileConfig } from "@keycloak/keycloak-admin-client/lib/defs/userProfileMetadata";
 import type UserRepresentation from "@keycloak/keycloak-admin-client/lib/defs/userRepresentation";
-import { Credentials } from "libs/keycloak-admin-client/lib/utils/auth";
+import { Credentials } from "@keycloak/keycloak-admin-client/lib/utils/auth";
 import { merge } from "lodash-es";
 
 class AdminClient {
@@ -243,6 +243,18 @@ class AdminClient {
       id: client[0]?.id!,
       clientScopeId: scope?.id!,
     });
+  }
+
+  async getUserProfile(realm: string) {
+    await this.#login();
+
+    return await this.#client.users.getProfile({ realm });
+  }
+
+  async updateUserProfile(realm: string, userProfile: UserProfileConfig) {
+    await this.#login();
+
+    await this.#client.users.updateProfile(merge(userProfile, { realm }));
   }
 
   async patchUserProfile(realm: string, payload: UserProfileConfig) {

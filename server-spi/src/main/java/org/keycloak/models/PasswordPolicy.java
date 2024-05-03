@@ -17,7 +17,6 @@
 
 package org.keycloak.models;
 
-import org.keycloak.crypto.Algorithm;
 import org.keycloak.policy.PasswordPolicyConfigException;
 import org.keycloak.policy.PasswordPolicyProvider;
 
@@ -34,11 +33,7 @@ public class PasswordPolicy implements Serializable {
 
     public static final String HASH_ALGORITHM_ID = "hashAlgorithm";
 
-    public static final String HASH_ALGORITHM_DEFAULT = "pbkdf2-sha256";
-
     public static final String HASH_ITERATIONS_ID = "hashIterations";
-
-    public static final int HASH_ITERATIONS_DEFAULT = 27500;
 
     public static final String PASSWORD_HISTORY_ID = "passwordHistory";
 
@@ -82,7 +77,7 @@ public class PasswordPolicy implements Serializable {
         if (policyConfig.containsKey(HASH_ALGORITHM_ID)) {
             return getPolicyConfig(HASH_ALGORITHM_ID);
         } else {
-            return HASH_ALGORITHM_DEFAULT;
+            return null;
         }
     }
 

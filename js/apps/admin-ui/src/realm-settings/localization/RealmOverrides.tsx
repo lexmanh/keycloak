@@ -3,17 +3,23 @@ import {
   Button,
   ButtonVariant,
   Divider,
-  Dropdown,
-  DropdownItem,
   Form,
   FormGroup,
+  TextContent,
+  Text,
+  ToolbarItem,
+  TextVariants,
+  TextInput,
+} from "@patternfly/react-core";
+import {
+  Dropdown,
+  DropdownItem,
   KebabToggle,
   Select,
   SelectGroup,
   SelectOption,
   SelectVariant,
-  ToolbarItem,
-} from "@patternfly/react-core";
+} from "@patternfly/react-core/deprecated";
 import {
   CheckIcon,
   PencilAltIcon,
@@ -21,45 +27,46 @@ import {
   TimesIcon,
 } from "@patternfly/react-icons";
 import {
+  ActionsColumn,
   IRow,
   IRowCell,
-  Table,
   Tbody,
   Td,
   Th,
   Thead,
   Tr,
 } from "@patternfly/react-table";
-import RealmRepresentation from "libs/keycloak-admin-client/lib/defs/realmRepresentation";
+import { Table } from "@patternfly/react-table/deprecated";
+import type RealmRepresentation from "@keycloak/keycloak-admin-client/lib/defs/realmRepresentation";
 import { cloneDeep, isEqual, uniqWith } from "lodash-es";
-import { ChangeEvent, useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useState, type FormEvent } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { adminClient } from "../../admin-client";
 import { useAlerts } from "../../components/alert/Alerts";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
 import { KeyValueType } from "../../components/key-value-form/key-value-convert";
-import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
 import { ListEmptyState } from "../../components/list-empty-state/ListEmptyState";
 import { PaginatingTableToolbar } from "../../components/table-toolbar/PaginatingTableToolbar";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import { useWhoAmI } from "../../context/whoami/WhoAmI";
 import { DEFAULT_LOCALE } from "../../i18n/i18n";
 import { localeToDisplayName } from "../../util";
-import { AddMessageBundleModal } from "../AddMessageBundleModal";
+import { AddTranslationModal } from "../AddTranslationModal";
 
 type RealmOverridesProps = {
   internationalizationEnabled: boolean;
   watchSupportedLocales: string[];
   realm: RealmRepresentation;
+  tableData: Record<string, string>[] | undefined;
 };
 
 type EditStatesType = { [key: number]: boolean };
 
-export type BundleForm = {
+export type TranslationForm = {
   key: string;
   value: string;
-  messageBundle: KeyValueType;
+  translation: KeyValueType;
 };
 
 export enum RowEditAction {
@@ -73,12 +80,12 @@ export const RealmOverrides = ({
   internationalizationEnabled,
   watchSupportedLocales,
   realm,
+  tableData,
 }: RealmOverridesProps) => {
   const { t } = useTranslation();
-  const [addMessageBundleModalOpen, setAddMessageBundleModalOpen] =
-    useState(false);
+  const [addTranslationModalOpen, setAddTranslationModalOpen] = useState(false);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
-  const [messageBundles, setMessageBundles] = useState<[string, string][]>([]);
+  const [translations, setTranslations] = useState<[string, string][]>([]);
   const [selectMenuLocale, setSelectMenuLocale] = useState(DEFAULT_LOCALE);
   const [kebabOpen, setKebabOpen] = useState(false);
   const { getValues, handleSubmit } = useForm();
@@ -88,7 +95,7 @@ export const RealmOverrides = ({
   const [max, setMax] = useState(10);
   const [first, setFirst] = useState(0);
   const [filter, setFilter] = useState("");
-  const bundleForm = useForm<BundleForm>({ mode: "onChange" });
+  const translationForm = useForm<TranslationForm>({ mode: "onChange" });
   const { addAlert, addError } = useAlerts();
   const { realm: currentRealm } = useRealm();
   const { whoAmI } = useWhoAmI();
@@ -114,14 +121,14 @@ export const RealmOverrides = ({
         });
 
         if (filter) {
-          const searchInBundles = (idx: number) => {
+          const searchInTranslations = (idx: number) => {
             return Object.entries(result).filter((i) =>
               i[idx].includes(filter),
             );
           };
 
           const filtered = uniqWith(
-            searchInBundles(0).concat(searchInBundles(1)),
+            searchInTranslations(0).concat(searchInTranslations(1)),
             isEqual,
           );
 
@@ -134,34 +141,34 @@ export const RealmOverrides = ({
       }
     };
 
-    fetchLocalizationTexts().then((bundles) => {
-      setMessageBundles(bundles);
+    fetchLocalizationTexts().then((translations) => {
+      setTranslations(translations);
 
-      const updatedRows: IRow[] = bundles.map(
-        (messageBundle): IRow => ({
+      const updatedRows: IRow[] = translations.map(
+        (translation): IRow => ({
           rowEditBtnAriaLabel: () =>
             t("rowEditBtnAriaLabel", {
-              messageBundle: messageBundle[1],
+              translation: translation[1],
             }),
           rowSaveBtnAriaLabel: () =>
             t("rowSaveBtnAriaLabel", {
-              messageBundle: messageBundle[1],
+              translation: translation[1],
             }),
           rowCancelBtnAriaLabel: () =>
             t("rowCancelBtnAriaLabel", {
-              messageBundle: messageBundle[1],
+              translation: translation[1],
             }),
           cells: [
             {
-              title: messageBundle[0],
+              title: translation[0],
               props: {
-                value: messageBundle[0],
+                value: translation[0],
               },
             },
             {
-              title: messageBundle[1],
+              title: translation[1],
               props: {
-                value: messageBundle[1],
+                value: translation[1],
               },
             },
           ],
@@ -170,10 +177,10 @@ export const RealmOverrides = ({
 
       setTableRows(updatedRows);
     });
-  }, [tableKey, first, max, filter]);
+  }, [tableKey, tableData, first, max, filter]);
 
   const handleModalToggle = () => {
-    setAddMessageBundleModalOpen(!addMessageBundleModalOpen);
+    setAddTranslationModalOpen(!addTranslationModalOpen);
   };
 
   const options = [
@@ -208,21 +215,25 @@ export const RealmOverrides = ({
         realmName: currentRealm!,
       });
       refreshTable();
-      bundleForm.setValue("key", "");
-      bundleForm.setValue("value", "");
-      addAlert(t("addMessageBundleSuccess"), AlertVariant.success);
+      translationForm.setValue("key", "");
+      translationForm.setValue("value", "");
+      addAlert(t("addTranslationSuccess"), AlertVariant.success);
     } catch (error) {
-      addError(t("addMessageBundleError"), error);
+      addError(t("addTranslationError"), error);
     }
   };
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
-    titleKey: "deleteConfirmMessageBundle",
-    messageKey: t("messageBundleDeleteConfirmDialog", {
+    titleKey: "deleteConfirmTranslationTitle",
+    messageKey: t("translationDeleteConfirmDialog", {
       count: selectedRowKeys.length,
     }),
     continueButtonLabel: "delete",
     continueButtonVariant: ButtonVariant.danger,
+    onCancel: () => {
+      setSelectedRowKeys([]);
+      setAreAllRowsSelected(false);
+    },
     onConfirm: async () => {
       try {
         for (const key of selectedRowKeys) {
@@ -235,9 +246,9 @@ export const RealmOverrides = ({
         setAreAllRowsSelected(false);
         setSelectedRowKeys([]);
         refreshTable();
-        addAlert(t("deleteAllMessagesBundleSuccess"), AlertVariant.success);
+        addAlert(t("deleteAllTranslationsSuccess"), AlertVariant.success);
       } catch (error) {
-        addError("deleteAllMessagesBundleError", error);
+        addError("deleteAllTranslationsError", error);
       }
     },
   });
@@ -298,10 +309,10 @@ export const RealmOverrides = ({
         value,
       );
 
-      addAlert(t("updateMessageBundleSuccess"), AlertVariant.success);
+      addAlert(t("updateTranslationSuccess"), AlertVariant.success);
       setTableRows(newRows);
     } catch (error) {
-      addAlert(t("updateMessageBundleError"), AlertVariant.danger);
+      addAlert(t("updateTranslationError"), AlertVariant.danger);
     }
 
     setEditStates((prevEditStates) => ({
@@ -313,18 +324,26 @@ export const RealmOverrides = ({
   return (
     <>
       <DeleteConfirm />
-      {addMessageBundleModalOpen && (
-        <AddMessageBundleModal
+      {addTranslationModalOpen && (
+        <AddTranslationModal
           handleModalToggle={handleModalToggle}
           save={(pair: any) => {
             addKeyValue(pair);
             handleModalToggle();
           }}
-          form={bundleForm}
+          form={translationForm}
         />
       )}
+      <TextContent>
+        <Text
+          className="pf-v5-u-mt-lg pf-v5-u-ml-md"
+          component={TextVariants.p}
+        >
+          {t("realmOverridesDescription")}
+        </Text>
+      </TextContent>
       <PaginatingTableToolbar
-        count={messageBundles.length}
+        count={translations.length}
         first={first}
         max={max}
         onNextClick={setFirst}
@@ -339,14 +358,18 @@ export const RealmOverrides = ({
           setFirst(0);
           setMax(10);
         }}
-        inputGroupPlaceholder={t("searchForMessageBundle")}
+        inputGroupPlaceholder={t("searchForTranslation")}
         toolbarItem={
           <>
             <Button
-              data-testid="add-bundle-button"
-              onClick={() => setAddMessageBundleModalOpen(true)}
+              data-testid="add-translationBtn"
+              onClick={() => {
+                setAddTranslationModalOpen(true);
+                setAreAllRowsSelected(false);
+                setSelectedRowKeys([]);
+              }}
             >
-              {t("addMessageBundle")}
+              {t("addTranslation")}
             </Button>
             <ToolbarItem>
               <Dropdown
@@ -360,10 +383,9 @@ export const RealmOverrides = ({
                   <DropdownItem
                     key="action"
                     component="button"
-                    data-testid="delete-selected-bundleBtn"
+                    data-testid="delete-selected-TranslationBtn"
                     isDisabled={
-                      messageBundles.length === 0 ||
-                      selectedRowKeys.length === 0
+                      translations.length === 0 || selectedRowKeys.length === 0
                     }
                     onClick={() => {
                       toggleDeleteDialog();
@@ -385,7 +407,9 @@ export const RealmOverrides = ({
               className="kc-filter-by-locale-select"
               variant={SelectVariant.single}
               isDisabled={!internationalizationEnabled}
-              onToggle={(isExpanded) => setFilterDropdownOpen(isExpanded)}
+              onToggle={(_event, isExpanded) =>
+                setFilterDropdownOpen(isExpanded)
+              }
               onSelect={(_, value) => {
                 setSelectMenuLocale(value.toString());
                 setSelectMenuValueSelected(true);
@@ -405,15 +429,15 @@ export const RealmOverrides = ({
           </ToolbarItem>
         }
       >
-        {messageBundles.length === 0 && !filter && (
+        {translations.length === 0 && !filter && (
           <ListEmptyState
             hasIcon
-            message={t("noMessageBundles")}
-            instructions={t("noMessageBundlesInstructions")}
+            message={t("noTranslations")}
+            instructions={t("noTranslationsInstructions")}
             onPrimaryAction={handleModalToggle}
           />
         )}
-        {messageBundles.length === 0 && filter && (
+        {translations.length === 0 && filter && (
           <ListEmptyState
             hasIcon
             icon={SearchIcon}
@@ -422,14 +446,14 @@ export const RealmOverrides = ({
             instructions={t("noRealmOverridesSearchResultsInstructions")}
           />
         )}
-        {messageBundles.length !== 0 && (
+        {translations.length !== 0 && (
           <Table
             aria-label={t("editableRowsTable")}
             data-testid="editable-rows-table"
           >
             <Thead>
               <Tr>
-                <Th className="pf-u-px-lg">
+                <Th className="pf-v5-u-px-lg">
                   <input
                     type="checkbox"
                     aria-label={t("selectAll")}
@@ -438,8 +462,8 @@ export const RealmOverrides = ({
                     data-testid="selectAll"
                   />
                 </Th>
-                <Th className="pf-u-py-lg">{t("key")}</Th>
-                <Th className="pf-u-py-lg">{t("value")}</Th>
+                <Th className="pf-v5-u-py-lg">{t("key")}</Th>
+                <Th className="pf-v5-u-py-lg">{t("value")}</Th>
                 <Th aria-hidden="true" />
               </Tr>
             </Thead>
@@ -447,7 +471,7 @@ export const RealmOverrides = ({
               {tableRows.map((row, rowIndex) => (
                 <Tr key={(row.cells?.[0] as IRowCell).props.value}>
                   <Td
-                    className="pf-u-px-lg"
+                    className="pf-v5-u-px-lg"
                     select={{
                       rowIndex,
                       onSelect: (event) =>
@@ -460,52 +484,55 @@ export const RealmOverrides = ({
                       ),
                     }}
                   />
-                  <Td className="pf-m-sm pf-u-px-sm" dataLabel={t("key")}>
+                  <Td className="pf-m-sm pf-v5-u-px-sm" dataLabel={t("key")}>
                     {(row.cells?.[0] as IRowCell).props.value}
                   </Td>
                   <Td
-                    className="pf-m-sm pf-u-px-sm"
+                    className="pf-m-sm pf-v5-u-px-sm"
                     dataLabel={t("value")}
                     key={rowIndex}
                   >
                     <Form
                       isHorizontal
-                      className="kc-form-bundleValue"
+                      className="kc-form-translationValue"
                       onSubmit={handleSubmit(() => {
                         onSubmit(formValue, rowIndex);
                       })}
                     >
                       <FormGroup
-                        fieldId="kc-bundleValue"
-                        className="pf-u-display-inline-block"
+                        fieldId="kc-translationValue"
+                        className="pf-v5-u-display-inline-block"
                       >
                         {editStates[rowIndex] ? (
                           <>
-                            <KeycloakTextInput
-                              aria-label={t("editUserLabel")}
+                            <TextInput
+                              aria-label={t("editTranslationValue")}
                               type="text"
-                              className="pf-u-w-initial"
-                              data-testid={`editUserLabelInput-${rowIndex}`}
+                              className="pf-v5-u-w-initial"
+                              data-testid={`editTranslationValueInput-${rowIndex}`}
                               value={formValue}
                               onChange={(
-                                event: ChangeEvent<HTMLInputElement>,
+                                event: FormEvent<HTMLInputElement>,
+                                value: string,
                               ) => {
-                                setFormValue(event.target.value);
+                                setFormValue(value);
                               }}
                               key={`edit-input-${rowIndex}`}
                             />
                             <Button
                               variant="link"
                               className="pf-m-plain"
-                              data-testid={`editUserLabelAcceptBtn-${rowIndex}`}
+                              data-testid={`editTranslationAcceptBtn-${rowIndex}`}
                               type="submit"
+                              aria-label={t("acceptBtn")}
                               icon={<CheckIcon />}
                             />
                             <Button
                               variant="link"
                               className="pf-m-plain"
-                              data-testid={`editUserLabelCancelBtn-${rowIndex}`}
+                              data-testid={`editTranslationCancelBtn-${rowIndex}`}
                               icon={<TimesIcon />}
+                              aria-label={t("cancelBtn")}
                               onClick={() => {
                                 setEditStates((prevEditStates) => ({
                                   ...prevEditStates,
@@ -531,10 +558,10 @@ export const RealmOverrides = ({
                                 }));
                               }}
                               key={`edit-button-${rowIndex}`}
-                              aria-label={t("editUserLabel")}
+                              aria-label={t("editBtn")}
                               variant="link"
                               className="pf-m-plain"
-                              data-testid={`editUserLabelBtn-${rowIndex}`}
+                              data-testid={`editTranslationBtn-${rowIndex}`}
                             >
                               <PencilAltIcon />
                             </Button>
@@ -544,20 +571,21 @@ export const RealmOverrides = ({
                     </Form>
                   </Td>
                   <Td isActionCell>
-                    <Dropdown
-                      toggle={
-                        <KebabToggle
-                          className="pf-m-plain"
-                          data-testid="realmOverrides-deleteKebabToggle"
-                        />
-                      }
-                      onClick={() => {
-                        setSelectedRowKeys([
-                          (row.cells?.[0] as IRowCell).props.value,
-                        ]);
-                        toggleDeleteDialog();
-                        setKebabOpen(false);
-                      }}
+                    <ActionsColumn
+                      items={[
+                        {
+                          title: t("delete"),
+                          onClick: () => {
+                            setSelectedRowKeys([
+                              (row.cells?.[0] as IRowCell).props.value,
+                            ]);
+                            translations.length === 1 &&
+                              setAreAllRowsSelected(true);
+                            toggleDeleteDialog();
+                            setKebabOpen(false);
+                          },
+                        },
+                      ]}
                     />
                   </Td>
                 </Tr>

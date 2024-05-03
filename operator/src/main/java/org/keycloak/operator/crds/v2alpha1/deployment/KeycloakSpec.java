@@ -17,13 +17,17 @@
 package org.keycloak.operator.crds.v2alpha1.deployment;
 
 import io.fabric8.kubernetes.api.model.LocalObjectReference;
+import io.fabric8.kubernetes.api.model.ResourceRequirements;
 import io.fabric8.kubernetes.model.annotation.SpecReplicas;
 
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.CacheSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.DatabaseSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.FeatureSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.HostnameSpec;
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.HttpManagementSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.HttpSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.IngressSpec;
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.ProxySpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.TransactionsSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.Truststore;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.UnsupportedSpec;
@@ -89,6 +93,22 @@ public class KeycloakSpec {
 
     @JsonPropertyDescription("In this section you can configure Keycloak truststores.")
     private Map<String, Truststore> truststores = new LinkedHashMap<>();
+
+    @JsonProperty("cache")
+    @JsonPropertyDescription("In this section you can configure Keycloak's cache")
+    private CacheSpec cacheSpec;
+
+    @JsonProperty("resources")
+    @JsonPropertyDescription("Compute Resources required by Keycloak container")
+    private ResourceRequirements resourceRequirements;
+
+    @JsonProperty("proxy")
+    @JsonPropertyDescription("In this section you can configure Keycloak's reverse proxy setting")
+    private ProxySpec proxySpec;
+
+    @JsonProperty("httpManagement")
+    @JsonPropertyDescription("In this section you can configure Keycloak's management interface setting.")
+    private HttpManagementSpec httpManagementSpec;
 
     public HttpSpec getHttpSpec() {
         return httpSpec;
@@ -170,6 +190,14 @@ public class KeycloakSpec {
         this.imagePullSecrets = imagePullSecrets;
     }
 
+    public HttpManagementSpec getHttpManagementSpec() {
+        return httpManagementSpec;
+    }
+
+    public void setHttpManagementSpec(HttpManagementSpec httpManagementSpec) {
+        this.httpManagementSpec = httpManagementSpec;
+    }
+
     public List<ValueOrSecret> getAdditionalOptions() {
         if (this.additionalOptions == null) {
             this.additionalOptions = new ArrayList<>();
@@ -200,4 +228,27 @@ public class KeycloakSpec {
         this.truststores = truststores;
     }
 
+    public CacheSpec getCacheSpec() {
+        return cacheSpec;
+    }
+
+    public void setCacheSpec(CacheSpec cache) {
+        this.cacheSpec = cache;
+    }
+
+    public ResourceRequirements getResourceRequirements() {
+        return resourceRequirements;
+    }
+
+    public void setResourceRequirements(ResourceRequirements resourceRequirements) {
+        this.resourceRequirements = resourceRequirements;
+    }
+
+    public ProxySpec getProxySpec() {
+        return proxySpec;
+    }
+
+    public void setProxySpec(ProxySpec proxySpec) {
+        this.proxySpec = proxySpec;
+    }
 }

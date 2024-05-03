@@ -14,16 +14,22 @@ import {
   Panel,
   PanelHeader,
   PanelMainBody,
-  Select,
-  SelectOption,
-  SelectVariant,
   Switch,
   Title,
 } from "@patternfly/react-core";
+import {
+  Select,
+  SelectOption,
+  SelectVariant,
+} from "@patternfly/react-core/deprecated";
 import { useState } from "react";
 import { Controller, FormProvider, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { HelpItem } from "ui-shared";
+import {
+  FormErrorText,
+  HelpItem,
+  TextControl,
+} from "@keycloak/keycloak-ui-shared";
 
 import { ForbiddenSection } from "../../ForbiddenSection";
 import { adminClient } from "../../admin-client";
@@ -34,7 +40,6 @@ import {
   KeyValueType,
   keyValueToArray,
 } from "../../components/key-value-form/key-value-convert";
-import { KeycloakTextInput } from "../../components/keycloak-text-input/KeycloakTextInput";
 import { UserSelect } from "../../components/users/UserSelect";
 import { useAccess } from "../../context/access/Access";
 import { useRealm } from "../../context/realm-context/RealmContext";
@@ -96,7 +101,6 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
   const form = useForm<EvaluateFormInputs>({ mode: "onChange" });
   const {
     control,
-    register,
     reset,
     trigger,
     formState: { isValid, errors },
@@ -104,9 +108,7 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
   const { t } = useTranslation();
   const { addError } = useAlerts();
   const realm = useRealm();
-
   const [scopesDropdownOpen, setScopesDropdownOpen] = useState(false);
-
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [applyToResourceType, setApplyToResourceType] = useState(false);
@@ -114,7 +116,6 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
   const [scopes, setScopes] = useState<ScopeRepresentation[]>([]);
   const [evaluateResult, setEvaluateResult] =
     useState<PolicyEvaluationResponse>();
-
   const [clientRoles, setClientRoles] = useState<RoleRepresentation[]>([]);
 
   useFetch(
@@ -226,8 +227,6 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
                   <HelpItem helpText={t("rolesHelp")} fieldLabelId="roles" />
                 }
                 fieldId="realmRole"
-                validated={errors.roleIds ? "error" : "default"}
-                helperTextInvalid={t("required")}
                 isRequired={user.length === 0}
               >
                 <Controller
@@ -243,7 +242,7 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
                       placeholderText={t("selectARole")}
                       variant={SelectVariant.typeaheadMulti}
                       toggleId="role"
-                      onToggle={setRoleDropdownOpen}
+                      onToggle={(_event, val) => setRoleDropdownOpen(val)}
                       selections={field.value}
                       onSelect={(_, v) => {
                         const option = v.toString();
@@ -275,13 +274,14 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
                     </Select>
                   )}
                 />
+                {errors.roleIds && <FormErrorText message={t("required")} />}
               </FormGroup>
             </FormAccess>
           </PanelMainBody>
         </Panel>
         <Panel>
           <PanelHeader>
-            <Title headingLevel="h2">{t("identityInformation")}</Title>
+            <Title headingLevel="h2">{t("permissions")}</Title>
           </PanelHeader>
           <PanelMainBody>
             <FormAccess isHorizontal role="view-clients">
@@ -300,11 +300,10 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
                   label={t("on")}
                   labelOff={t("off")}
                   isChecked={applyToResourceType}
-                  onChange={setApplyToResourceType}
+                  onChange={(_event, val) => setApplyToResourceType(val)}
                   aria-label={t("applyToResourceType")}
                 />
               </FormGroup>
-
               {!applyToResourceType ? (
                 <FormGroup
                   label={t("resourcesAndScopes")}
@@ -328,26 +327,12 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
                 </FormGroup>
               ) : (
                 <>
-                  <FormGroup
+                  <TextControl
+                    name="alias"
                     label={t("resourceType")}
-                    isRequired
-                    labelIcon={
-                      <HelpItem
-                        helpText={t("resourceTypeHelp")}
-                        fieldLabelId="resourceType"
-                      />
-                    }
-                    fieldId="client"
-                    validated={errors.alias ? "error" : "default"}
-                    helperTextInvalid={t("required")}
-                  >
-                    <KeycloakTextInput
-                      id="alias"
-                      aria-label="resource-type"
-                      data-testid="alias"
-                      {...register("alias", { required: true })}
-                    />
-                  </FormGroup>
+                    labelIcon={t("resourceTypeHelp")}
+                    rules={{ required: t("required") }}
+                  />
                   <FormGroup
                     label={t("authScopes")}
                     labelIcon={
@@ -365,7 +350,7 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
                       render={({ field }) => (
                         <Select
                           toggleId="authScopes"
-                          onToggle={setScopesDropdownOpen}
+                          onToggle={(_event, val) => setScopesDropdownOpen(val)}
                           onSelect={(_, v) => {
                             const option = v.toString();
                             if (field.value.includes(option)) {
@@ -381,8 +366,9 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
                           }}
                           selections={field.value}
                           variant={SelectVariant.typeaheadMulti}
-                          typeAheadAriaLabel={t("authScopes")}
+                          typeAheadAriaLabel={t("selectAuthScopes")}
                           isOpen={scopesDropdownOpen}
+                          aria-label={t("selectAuthScopes")}
                         >
                           {scopes.map((scope) => (
                             <SelectOption
@@ -411,7 +397,6 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
                       fieldLabelId={`contextualAttributes`}
                     />
                   }
-                  helperTextInvalid={t("required")}
                   fieldId="contextualAttributes"
                 >
                   <KeyBasedAttributeInput
@@ -427,7 +412,7 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
           <Button
             data-testid="authorization-eval"
             id="authorization-eval"
-            className="pf-u-mr-md"
+            className="pf-v5-u-mr-md"
             isDisabled={!isValid}
             onClick={() => evaluate()}
           >
@@ -436,7 +421,7 @@ const AuthorizationEvaluateContent = ({ client }: Props) => {
           <Button
             data-testid="authorization-revert"
             id="authorization-revert"
-            className="pf-u-mr-md"
+            className="pf-v5-u-mr-md"
             variant="link"
             onClick={() => reset()}
           >
