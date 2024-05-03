@@ -13,7 +13,15 @@
       "types": ["account", "admin"]
     },
     {
+      "name": "loctroi",
+      "types": ["account", "login", "admin", "welcome", "email"]
+    },
+    {
       "name": "farmerp",
+      "types": ["account", "login", "admin", "welcome", "email"]
+    },
+    {
+      "name": "runclub",
       "types": ["account", "login", "admin", "welcome", "email"]
     }
   ]
