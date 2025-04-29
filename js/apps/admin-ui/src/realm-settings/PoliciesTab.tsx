@@ -1,5 +1,12 @@
 import type ClientPolicyRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientPolicyRepresentation";
-import { CodeEditor, Language } from "@patternfly/react-code-editor";
+import {
+  Action,
+  KeycloakDataTable,
+  KeycloakSpinner,
+  ListEmptyState,
+  useAlerts,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
 import {
   AlertVariant,
   Button,
@@ -13,23 +20,17 @@ import {
   Title,
   ToolbarItem,
 } from "@patternfly/react-core";
+import { omit } from "lodash-es";
 import { useState } from "react";
 import { Controller, useForm, type UseFormReturn } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-
-import { adminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAdminClient } from "../admin-client";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
-import { KeycloakSpinner } from "../components/keycloak-spinner/KeycloakSpinner";
-import { ListEmptyState } from "../components/list-empty-state/ListEmptyState";
-import {
-  Action,
-  KeycloakDataTable,
-} from "../components/table-toolbar/KeycloakDataTable";
+import CodeEditor from "../components/form/CodeEditor";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { prettyPrintJSON } from "../util";
-import { useFetch } from "../utils/useFetch";
+import { translationFormatter } from "../utils/translationFormatter";
 import { toAddClientPolicy } from "./routes/AddClientPolicy";
 import { toClientPolicies } from "./routes/ClientPolicies";
 import { toEditClientPolicy } from "./routes/EditClientPolicy";
@@ -41,6 +42,8 @@ type ClientPolicy = ClientPolicyRepresentation & {
 };
 
 export const PoliciesTab = () => {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
   const { realm } = useRealm();
@@ -75,9 +78,9 @@ export const PoliciesTab = () => {
 
       const allClientPolicies = globalPolicies?.concat(policies ?? []);
 
-      setPolicies(allClientPolicies),
-        setTablePolicies(allClientPolicies || []),
-        setCode(prettyPrintJSON(allClientPolicies));
+      setPolicies(allClientPolicies);
+      setTablePolicies(allClientPolicies || []);
+      setCode(prettyPrintJSON(allClientPolicies));
     },
     [key],
   );
@@ -112,6 +115,9 @@ export const PoliciesTab = () => {
     }
   };
 
+  const normalizePolicy = (policy: ClientPolicy): ClientPolicyRepresentation =>
+    omit(policy, "global");
+
   const save = async () => {
     if (!code) {
       return;
@@ -120,9 +126,18 @@ export const PoliciesTab = () => {
     try {
       const obj: ClientPolicy[] = JSON.parse(code);
 
+      const changedPolicies = obj
+        .filter((policy) => !policy.global)
+        .map((policy) => normalizePolicy(policy));
+
+      const changedGlobalPolicies = obj
+        .filter((policy) => policy.global)
+        .map((policy) => normalizePolicy(policy));
+
       try {
         await adminClient.clientPolicies.updatePolicy({
-          policies: obj,
+          policies: changedPolicies,
+          globalPolicies: changedGlobalPolicies,
         });
         addAlert(t("updateClientPoliciesSuccess"), AlertVariant.success);
         refresh();
@@ -131,7 +146,7 @@ export const PoliciesTab = () => {
       }
     } catch (error) {
       console.warn("Invalid json, ignoring value using {}");
-      addError("updateClientPoliciesError", error);
+      addError("invalidJsonClientPoliciesError", error);
     }
   };
 
@@ -160,7 +175,7 @@ export const PoliciesTab = () => {
         addAlert(t("deleteClientPolicySuccess"), AlertVariant.success);
         refresh();
       } catch (error) {
-        addError(t("deleteClientPolicyError"), error);
+        addError("deleteClientPolicyError", error);
       }
     },
   });
@@ -266,6 +281,7 @@ export const PoliciesTab = () => {
             },
             {
               name: "description",
+              cellFormatters: [translationFormatter(t)],
             },
           ]}
         />
@@ -273,13 +289,10 @@ export const PoliciesTab = () => {
         <>
           <div className="pf-v5-u-mt-md pf-v5-u-ml-lg">
             <CodeEditor
-              isLineNumbersVisible
-              isLanguageLabelVisible
-              isReadOnly={false}
-              code={code}
-              language={Language.json}
-              height="30rem"
-              onChange={setCode}
+              value={code}
+              language="json"
+              onChange={(value) => setCode(value)}
+              height={480}
             />
           </div>
           <div className="pf-v5-u-mt-md">

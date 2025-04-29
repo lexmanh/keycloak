@@ -1,9 +1,45 @@
 [[migration-changes]]
 == Migration Changes
 
+=== Migrating to 26.3.0
+
+include::changes-26_3_0.adoc[leveloffset=2]
+
+=== Migrating to 26.2.0
+
+include::changes-26_2_0.adoc[leveloffset=2]
+
+=== Migrating to 26.1.3
+
+include::changes-26_1_3.adoc[leveloffset=2]
+
+=== Migrating to 26.1.0
+
+include::changes-26_1_0.adoc[leveloffset=2]
+
+=== Migrating to 26.0.6
+
+include::changes-26_0_6.adoc[leveloffset=3]
+
+=== Migrating to 26.0.0
+
+include::changes-26_0_0.adoc[leveloffset=3]
+
+=== Migrating to 25.0.3
+
+include::changes-25_0_3.adoc[leveloffset=3]
+
+=== Migrating to 25.0.2
+
+include::changes-25_0_2.adoc[leveloffset=3]
+
 === Migrating to 25.0.0
 
 include::changes-25_0_0.adoc[leveloffset=3]
+
+=== Migrating to 24.0.4
+
+include::changes-24_0_4.adoc[leveloffset=3]
 
 === Migrating to 24.0.3
 
@@ -271,7 +307,7 @@ current version, the update is not possible and you will be immediately informed
 The fields `username`, `email`, `firstName` and `lastName` in the `UserModel` are migrated to custom attributes as a preparation for adding more sophisticated user profiles to {project_name} in an upcoming version.
 If a database contains users with custom attributes of that exact name, the custom attributes will need to be migrated before upgrading. This migration does not occur automatically. Otherwise, they will not be read from the database anymore and possibly deleted.
 This situation implies that the `username` can now also be accessed and set via `UserModel.getFirstAttribute(UserModel.USERNAME)`. Similar implications exist for other fields.
-Implementors of SPIs subclassing the `UserModel` directly or indirectly should ensure that the behavior between `setUsername` and `setSingleAttribute(UserModel.USERNAME, ...)` (and similar for the other fields) is consistent.
+Implementers of SPIs subclassing the `UserModel` directly or indirectly should ensure that the behavior between `setUsername` and `setSingleAttribute(UserModel.USERNAME, ...)` (and similar for the other fields) is consistent.
 Users of the policy evaluation feature have to adapt their policies if they use the number of attributes in their evaluations since every user will now have four new attributes by default.
 
 The public API of `UserModel` did not change. No changes to frontend resources or SPIs accessing user data are necessary.
@@ -452,7 +488,7 @@ Cross-Datacenter Replication changes::
   not guaranteed as we don't test it anymore.
 
 ==== New optional client scope
-We have added a new `microprofile-jwt` optional client scope to handle the claims defined in the https://wiki.eclipse.org/MicroProfile/JWT_Auth[MicroProfile/JWT Auth Specification].
+We have added a new `microprofile-jwt` optional client scope to handle the claims defined in the https://github.com/eclipse/microprofile/wiki/JWT_Auth[MicroProfile/JWT Auth Specification].
 This new client scope defines protocol mappers to set the username of the authenticated user to the `upn` claim and to
 set the realm roles to the `groups` claim.
 
@@ -680,7 +716,6 @@ Changes to {project_name} Authorization JavaScript adapter::
   the same behavior as before. The main change is on how you invoke both `authorization` and `entitlement` methods which now
   expect a specific object type representing an authorization request. This new object type provides more flexibility on how
   permissions can be obtained from the server by supporting the different parameters supported by the UMA grant type.
-  See link:{authorizationguide_link}#_enforcer_js_adapter[{authorizationguide_name}] for details.
 
   One of the main changes introduced by this release is that you are no longer required to exchange access tokens with RPTs in
   order to access resources protected by a resource server (when not using UMA). Depending on how the policy enforcer is configured on the resource server side, you can just send regular
@@ -894,7 +929,7 @@ You also need to update `keycloak-server.json` as it's changed due to this.
 
 ==== Adapter subsystems only bring in dependencies if Keycloak is on
 
-Previously, if you had installed our SAML or OIDC Keycloak subsystem adapters into WildFly or JBoss EAP, we would automatically include Keycloak client jars into EVERY application irregardless if you were using Keycloak or not.
+Previously, if you had installed our SAML or OIDC Keycloak subsystem adapters into WildFly or JBoss EAP, we would automatically include Keycloak client jars into EVERY application regardless if you were using Keycloak or not.
 These libraries are now only added to your deployment if you have Keycloak authentication turned on for that adapter (via the subsystem, or auth-method in web.xml)
 
 ==== Client Registration service endpoints moved
@@ -1079,7 +1114,7 @@ There are now 3 separate adapter downloads for WildFly, JBoss EAP and JBoss AS7:
 Make sure you grab the correct one.
 
 You also need to update standalone.xml as the extension module and subsystem definition has changed.
-See link:{adapterguide_link}[{adapterguide_name}] for details.
+See link:{securing_apps_link}[{securing_apps_name}] for details.
 
 === Migrating from 1.2.0.Beta1 to 1.2.0.RC1
 

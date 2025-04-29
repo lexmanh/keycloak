@@ -24,13 +24,24 @@ import org.keycloak.common.util.KeystoreUtil;
 import org.keycloak.component.ComponentModel;
 import org.keycloak.component.ComponentValidationException;
 import org.keycloak.crypto.Algorithm;
+import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.provider.ConfigurationValidationHelper;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.provider.ProviderConfigurationBuilder;
 
+import java.security.GeneralSecurityException;
+import java.security.cert.CertPath;
+import java.security.cert.CertPathValidator;
+import java.security.cert.CertificateFactory;
+import java.security.cert.PKIXParameters;
+import java.security.cert.TrustAnchor;
+import java.security.cert.X509Certificate;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.keycloak.provider.ProviderConfigProperty.LIST_TYPE;
@@ -91,7 +102,7 @@ public class JavaKeystoreKeyProviderFactory implements KeyProviderFactory {
 
     @Override
     public KeyProvider create(KeycloakSession session, ComponentModel model) {
-        return new JavaKeystoreKeyProvider(session.getContext().getRealm(), model);
+        return new JavaKeystoreKeyProvider(session.getContext().getRealm(), model, session.vault());
     }
 
     @Override
@@ -108,18 +119,57 @@ public class JavaKeystoreKeyProviderFactory implements KeyProviderFactory {
                 .checkSingle(KEY_PASSWORD_PROPERTY, true);
 
         try {
-            new JavaKeystoreKeyProvider(realm, model).loadKey(realm, model);
+            KeyWrapper key = new JavaKeystoreKeyProvider(realm, model, session.vault()).loadKey(realm, model);
+            validateCertificateChain(key.getCertificateChain());
+        } catch(GeneralSecurityException e) {
+            logger.error("Failed to load keys.", e);
+            throw new ComponentValidationException("Certificate error on server. " + e.getMessage(), e);
         } catch (Throwable t) {
             logger.error("Failed to load keys.", t);
             throw new ComponentValidationException("Failed to load keys. " + t.getMessage(), t);
         }
     }
 
+    /**
+     * <p>Validates the certificate chain in the store entry if it exists.</p>
+     *
+     * @param certificates
+     * @throws GeneralSecurityException
+     */
+    private static void validateCertificateChain(List<X509Certificate> certificates) throws GeneralSecurityException {
+        if (certificates == null || certificates.isEmpty()) {
+            return;
+        }
+
+        Set<TrustAnchor> anchors = new HashSet<>();
+
+        // consider the last certificate in the chain as the most trusted cert
+        anchors.add(new TrustAnchor(certificates.get(certificates.size() - 1), null));
+
+        PKIXParameters params = new PKIXParameters(anchors);
+
+        params.setRevocationEnabled(false);
+
+        CertPath certPath = CertificateFactory.getInstance("X.509").generateCertPath(certificates);
+        CertPathValidator validator = CertPathValidator.getInstance(CertPathValidator.getDefaultType());
+
+        validator.validate(certPath, params);
+    }
+
     // merge the algorithms supported for RSA and EC keys and provide them as one configuration property
     private static ProviderConfigProperty mergedAlgorithmProperties() {
-        List<String> ecAlgorithms = List.of(Algorithm.ES256, Algorithm.ES384, Algorithm.ES512);
-        List<String> algorithms = Stream.concat(Attributes.RS_ALGORITHM_PROPERTY.getOptions().stream(), ecAlgorithms.stream()).toList();
-        return new ProviderConfigProperty(Attributes.ALGORITHM_KEY, "Algorithm", "Intended algorithm for the key", LIST_TYPE, algorithms.toArray());
+        List<String> algorithms = Stream.of(
+                        List.of(Algorithm.AES, Algorithm.EdDSA),
+                        List.of(Algorithm.ES256, Algorithm.ES384, Algorithm.ES512),
+                        Attributes.HS_ALGORITHM_PROPERTY.getOptions(),
+                        Attributes.RS_ALGORITHM_PROPERTY.getOptions(),
+                        Attributes.RS_ENC_ALGORITHM_PROPERTY.getOptions(),
+                        GeneratedEcdhKeyProviderFactory.ECDH_ALGORITHM_PROPERTY.getOptions())
+                .flatMap(Collection::stream)
+                .toList();
+        return new ProviderConfigProperty(Attributes.RS_ALGORITHM_PROPERTY.getName(), Attributes.RS_ALGORITHM_PROPERTY.getLabel(),
+                Attributes.RS_ALGORITHM_PROPERTY.getHelpText(), Attributes.RS_ALGORITHM_PROPERTY.getType(),
+                Attributes.RS_ALGORITHM_PROPERTY.getDefaultValue(), algorithms.toArray(String[]::new));
 
     }
 

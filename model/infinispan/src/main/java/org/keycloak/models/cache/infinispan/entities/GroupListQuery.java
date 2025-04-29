@@ -14,13 +14,11 @@ import java.util.stream.Collectors;
  */
 public class GroupListQuery extends AbstractRevisioned implements GroupQuery {
     private final String realm;
-    private final String realmName;
-    private Map<String, Set<String>> searchKeys;
+    private final Map<String, Set<String>> searchKeys;
 
     public GroupListQuery(Long revisioned, String id, RealmModel realm, String searchKey, Set<String> result) {
         super(revisioned, id);
         this.realm = realm.getId();
-        this.realmName = realm.getName();
         this.searchKeys = new HashMap<>();
         this.searchKeys.put(searchKey, result);
     }
@@ -28,7 +26,6 @@ public class GroupListQuery extends AbstractRevisioned implements GroupQuery {
     public GroupListQuery(Long revisioned, String id, RealmModel realm, String searchKey, Set<String> result, GroupListQuery previous) {
         super(revisioned, id);
         this.realm = realm.getId();
-        this.realmName = realm.getName();
         this.searchKeys = new HashMap<>();
         this.searchKeys.putAll(previous.searchKeys);
         this.searchKeys.put(searchKey, result);
@@ -37,7 +34,6 @@ public class GroupListQuery extends AbstractRevisioned implements GroupQuery {
     public GroupListQuery(Long revisioned, String id, RealmModel realm, Set<String> ids) {
         super(revisioned, id);
         this.realm = realm.getId();
-        this.realmName = realm.getName();
         this.searchKeys = new HashMap<>();
         this.searchKeys.put(id, ids);
     }
@@ -62,18 +58,11 @@ public class GroupListQuery extends AbstractRevisioned implements GroupQuery {
         return realm;
     }
 
-    public Map<String, Set<String>> getSearchKeys() {
-        if (searchKeys == null) {
-            searchKeys = new HashMap<>();
-        }
-        return searchKeys;
-    }
-
     @Override
     public String toString() {
         return "GroupListQuery{" +
                 "id='" + getId() + "'" +
-                "realmName='" + realmName + '\'' +
+                "realm='" + realm + '\'' +
                 '}';
     }
 }

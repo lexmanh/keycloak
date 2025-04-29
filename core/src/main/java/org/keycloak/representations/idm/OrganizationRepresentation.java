@@ -17,6 +17,7 @@
 
 package org.keycloak.representations.idm;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -28,8 +29,14 @@ public class OrganizationRepresentation {
 
     private String id;
     private String name;
+    private String alias;
+    private boolean enabled = true;
+    private String description;
+    private String redirectUrl;
     private Map<String, List<String>> attributes;
     private Set<OrganizationDomainRepresentation> domains;
+    private List<MemberRepresentation> members;
+    private List<IdentityProviderRepresentation> identityProviders;
 
     public String getId() {
         return id;
@@ -45,6 +52,38 @@ public class OrganizationRepresentation {
 
     public String getName() {
         return name;
+    }
+
+    public String getAlias() {
+        return alias;
+    }
+
+    public void setAlias(String alias) {
+        this.alias = alias;
+    }
+
+    public boolean isEnabled() {
+        return this.enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public String getDescription() {
+        return this.description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getRedirectUrl() {
+        return redirectUrl;
+    }
+
+    public void setRedirectUrl(String redirectUrl) {
+        this.redirectUrl = redirectUrl;
     }
 
     public Map<String, List<String>> getAttributes() {
@@ -87,6 +126,36 @@ public class OrganizationRepresentation {
             return;
         }
         getDomains().remove(domain);
+    }
+
+    public List<MemberRepresentation> getMembers() {
+        return members;
+    }
+
+    public void setMembers(List<MemberRepresentation> members) {
+        this.members = members;
+    }
+
+    public void addMember(MemberRepresentation member) {
+        if (members == null) {
+            members = new ArrayList<>();
+        }
+        members.add(member);
+    }
+
+    public List<IdentityProviderRepresentation> getIdentityProviders() {
+        return identityProviders;
+    }
+
+    public void setIdentityProviders(List<IdentityProviderRepresentation> identityProviders) {
+        this.identityProviders = identityProviders;
+    }
+
+    public void addIdentityProvider(IdentityProviderRepresentation idp) {
+        if (identityProviders == null) {
+            identityProviders = new ArrayList<>();
+        }
+        identityProviders.add(idp);
     }
 
     @Override

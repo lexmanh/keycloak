@@ -32,8 +32,8 @@ import java.util.Map;
 
 import org.keycloak.common.util.Base64Url;
 import org.keycloak.common.util.KeyUtils;
-import org.keycloak.crypto.AsymmetricSignatureSignerContext;
-import org.keycloak.crypto.AsymmetricSignatureVerifierContext;
+import org.keycloak.crypto.ECDSASignatureSignerContext;
+import org.keycloak.crypto.ECDSASignatureVerifierContext;
 import org.keycloak.crypto.KeyUse;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureSignerContext;
@@ -43,8 +43,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * Import test-settings from:
- * https://github.com/openwallet-foundation-labs/sd-jwt-python/blob/main/src/sd_jwt/utils/demo_settings.yml
- * 
+ * <a href="https://github.com/openwallet-foundation-labs/sd-jwt-python/blob/main/src/sd_jwt/utils/demo_settings.yml">
+ *     open wallet foundation labs</a>
+ *
  * @author <a href="mailto:francis.pouatcha@adorsys.com">Francis Pouatcha</a>
  */
 public class TestSettings {
@@ -208,7 +209,7 @@ public class TestSettings {
         keyWrapper.setType(keyPair.getPublic().getAlgorithm());
         keyWrapper.setUse(KeyUse.SIG);
         keyWrapper.setKid(kid);
-        return new AsymmetricSignatureSignerContext(keyWrapper);
+        return new ECDSASignatureSignerContext(keyWrapper);
     }
 
     private static SignatureVerifierContext getSignatureVerifierContext(PublicKey publicKey, String algorithm,
@@ -219,7 +220,7 @@ public class TestSettings {
         keyWrapper.setType(publicKey.getAlgorithm());
         keyWrapper.setUse(KeyUse.SIG);
         keyWrapper.setKid(kid);
-        return new AsymmetricSignatureVerifierContext(keyWrapper);
+        return new ECDSASignatureVerifierContext(keyWrapper);
     }
 
     private static final Map<String, String> ECDSA_CURVE_2_SPECS_NAMES = new HashMap<>();

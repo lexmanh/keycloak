@@ -1,3 +1,4 @@
+import { useEnvironment } from "@keycloak/keycloak-ui-shared";
 import {
   Badge,
   Button,
@@ -11,11 +12,10 @@ import { UserCheckIcon } from "@patternfly/react-icons";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useAlerts } from "@keycloak/keycloak-ui-shared";
 
 import { fetchPermission, updateRequest } from "../api";
 import { Permission, Resource } from "../api/representations";
-import { useEnvironment } from "../root/KeycloakContext";
+import { useAccountAlerts } from "../utils/useAccountAlerts";
 
 type PermissionRequestProps = {
   resource: Resource;
@@ -28,7 +28,7 @@ export const PermissionRequest = ({
 }: PermissionRequestProps) => {
   const { t } = useTranslation();
   const context = useEnvironment();
-  const { addAlert, addError } = useAlerts();
+  const { addAlert, addError } = useAccountAlerts();
 
   const [open, setOpen] = useState(false);
 
@@ -56,7 +56,7 @@ export const PermissionRequest = ({
       toggle();
       refresh();
     } catch (error) {
-      addError(t("shareError", { error }).toString());
+      addError("shareError", error);
     }
   };
 

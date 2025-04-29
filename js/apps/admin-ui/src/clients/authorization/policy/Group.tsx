@@ -1,19 +1,13 @@
 import type GroupRepresentation from "@keycloak/keycloak-admin-client/lib/defs/groupRepresentation";
+import { HelpItem, TextControl, useFetch } from "@keycloak/keycloak-ui-shared";
 import { Button, Checkbox, FormGroup } from "@patternfly/react-core";
 import { MinusCircleIcon } from "@patternfly/react-icons";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { useState } from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import {
-  FormErrorText,
-  HelpItem,
-  TextControl,
-} from "@keycloak/keycloak-ui-shared";
-
-import { adminClient } from "../../../admin-client";
+import { useAdminClient } from "../../../admin-client";
 import { GroupPickerDialog } from "../../../components/group/GroupPickerDialog";
-import { useFetch } from "../../../utils/useFetch";
 
 type GroupForm = {
   groups?: GroupValue[];
@@ -26,13 +20,10 @@ export type GroupValue = {
 };
 
 export const Group = () => {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
-  const {
-    control,
-    getValues,
-    setValue,
-    formState: { errors },
-  } = useFormContext<GroupForm>();
+  const { control, getValues, setValue } = useFormContext<GroupForm>();
   const values = getValues("groups");
 
   const [open, setOpen] = useState(false);
@@ -68,16 +59,11 @@ export const Group = () => {
           <HelpItem helpText={t("policyGroupsHelp")} fieldLabelId="groups" />
         }
         fieldId="groups"
-        isRequired
       >
         <Controller
           name="groups"
           control={control}
           defaultValue={[]}
-          rules={{
-            validate: (value?: GroupValue[]) =>
-              value && value.filter(({ id }) => id).length > 0,
-          }}
           render={({ field }) => (
             <>
               {open && (
@@ -163,7 +149,6 @@ export const Group = () => {
             </Tbody>
           </Table>
         )}
-        {errors.groups && <FormErrorText message={t("requiredGroups")} />}
       </FormGroup>
     </>
   );

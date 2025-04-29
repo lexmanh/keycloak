@@ -94,27 +94,26 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
 
     @Override
     public boolean isReadOnly(String name) {
-        if (!isManagedAttribute(name)) {
-            return !isAllowEditUnmanagedAttribute();
+        if (isReadableOrWritableDuringRegistration(name)) {
+            return false;
         }
-
-        if (UserModel.USERNAME.equals(name)) {
-            if (isServiceAccountUser()) {
-                return true;
-            }
-        }
-
-        if (UserModel.EMAIL.equals(name)) {
-            if (isServiceAccountUser()) {
-                return false;
-            }
-        }
-
         if (isReadOnlyFromMetadata(name) || isReadOnlyInternalAttribute(name)) {
             return true;
         }
 
+        if (!isManagedAttribute(name)) {
+            return !isAllowEditUnmanagedAttribute();
+        }
+
         return getMetadata(name) == null;
+    }
+
+    private boolean isReadableOrWritableDuringRegistration(String name) {
+        if (context.equals(UserProfileContext.REGISTRATION) && isRequired(name)) {
+            // in context of registration, username or email (email as username) cannot be readonly otherwise registration is not possible
+            return UserModel.EMAIL.equals(name) || UserModel.USERNAME.equals(name);
+        }
+        return false;
     }
 
     private boolean isAllowEditUnmanagedAttribute() {
@@ -296,10 +295,12 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
                 continue;
             }
 
-            AttributeContext attributeContext = createAttributeContext(metadata);
+            if (!isReadableOrWritableDuringRegistration(name)) {
+                AttributeContext attributeContext = createAttributeContext(metadata);
 
-            if (!metadata.canView(attributeContext) || !metadata.isSelected(attributeContext)) {
-                attributes.remove(name);
+                if (!metadata.canView(attributeContext) || !metadata.isSelected(attributeContext)) {
+                    attributes.remove(name);
+                }
             }
         }
 
@@ -309,10 +310,6 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
     @Override
     public Map<String, List<String>> toMap() {
         return Collections.unmodifiableMap(this);
-    }
-
-    protected boolean isServiceAccountUser() {
-        return user != null && user.getServiceAccountClientLink() != null;
     }
 
     private AttributeContext createAttributeContext(Entry<String, List<String>> attribute, AttributeMetadata metadata) {
@@ -343,17 +340,12 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
     }
 
     private Map<String, AttributeMetadata> getUserStorageProviderMetadata(UserProfileMetadata profileMetadata) {
-        if (user == null || (StorageId.isLocalStorage(user.getId()) && user.getFederationLink() == null)) {
+        if (user == null || (StorageId.isLocalStorage(user.getId()) && !user.isFederated())) {
             // new user or not a user from a storage provider other than local
             return Collections.emptyMap();
         }
 
         String providerId = user.getFederationLink();
-
-        if (providerId == null) {
-            providerId = StorageId.providerId(user.getId());
-        }
-
         UserProvider userProvider = session.users();
 
         if (userProvider instanceof UserProfileDecorator) {
@@ -475,14 +467,15 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
 
         Stream<String> valuesStream = Optional.ofNullable(values).orElse(EMPTY_VALUE).stream().filter(Objects::nonNull);
 
-        if (UserModel.USERNAME.equals(name) || UserModel.EMAIL.equals(name)) {
+        // do not normalize the username if a federated user because we need to respect the format from the external identity store
+        if ((UserModel.USERNAME.equals(name) && !isFederated()) || UserModel.EMAIL.equals(name)) {
             valuesStream = valuesStream.map(KeycloakModelUtils::toLowerCaseSafe);
         }
 
         return valuesStream.collect(Collectors.toList());
     }
 
-    private boolean isAllowUnmanagedAttribute() {
+    protected boolean isAllowUnmanagedAttribute() {
         UnmanagedAttributePolicy unmanagedAttributePolicy = upConfig.getUnmanagedAttributePolicy();
 
         if (unmanagedAttributePolicy == null) {
@@ -501,11 +494,8 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
         return UnmanagedAttributePolicy.ENABLED.equals(unmanagedAttributePolicy);
     }
 
-    private void setUserName(Map<String, List<String>> newAttributes, List<String> lowerCaseEmailList) {
-        if (isServiceAccountUser()) {
-            return;
-        }
-        newAttributes.put(UserModel.USERNAME, lowerCaseEmailList);
+    protected void setUserName(Map<String, List<String>> newAttributes, List<String> values) {
+        newAttributes.put(UserModel.USERNAME, values);
     }
 
     protected boolean isIncludeAttributeIfNotProvided(AttributeMetadata metadata) {
@@ -527,10 +517,6 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
         }
 
         if (isManagedAttribute(name)) {
-            return true;
-        }
-
-        if (isServiceAccountUser()) {
             return true;
         }
 
@@ -575,7 +561,7 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
         return unmanagedAttributes;
     }
 
-    private AttributeMetadata createUnmanagedAttributeMetadata(String name) {
+    protected AttributeMetadata createUnmanagedAttributeMetadata(String name) {
         return new AttributeMetadata(name, Integer.MAX_VALUE) {
             final UnmanagedAttributePolicy unmanagedAttributePolicy = upConfig.getUnmanagedAttributePolicy();
 
@@ -591,5 +577,9 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
                         || (UnmanagedAttributePolicy.ADMIN_EDIT.equals(unmanagedAttributePolicy) && context.getContext().isAdminContext());
             }
         };
+    }
+
+    private boolean isFederated() {
+        return user != null && user.isFederated();
     }
 }

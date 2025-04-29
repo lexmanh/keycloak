@@ -31,13 +31,13 @@ import com.apicatalog.rdf.io.RdfWriter;
 import com.apicatalog.rdf.io.error.RdfWriterException;
 import com.apicatalog.rdf.io.error.UnsupportedContentException;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.setl.rdf.normalization.RdfNormalize;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonValue;
 import org.keycloak.crypto.SignatureSignerContext;
-import org.keycloak.protocol.oid4vc.issuance.signing.SigningServiceException;
+import org.keycloak.protocol.oid4vc.issuance.signing.CredentialSignerException;
 import org.keycloak.protocol.oid4vc.model.VerifiableCredential;
+import org.keycloak.util.JsonSerialization;
 
 import java.io.IOException;
 import java.io.StringReader;
@@ -59,13 +59,11 @@ import java.util.Optional;
  */
 public class Ed255192018Suite implements LinkedDataCryptographicSuite {
 
-    private final ObjectMapper objectMapper;
     private final SignatureSignerContext signerContext;
 
     public static final String PROOF_TYPE = "Ed25519Signature2018";
 
-    public Ed255192018Suite(ObjectMapper objectMapper, SignatureSignerContext signerContext) {
-        this.objectMapper = objectMapper;
+    public Ed255192018Suite(SignatureSignerContext signerContext) {
         this.signerContext = signerContext;
     }
 
@@ -79,7 +77,7 @@ public class Ed255192018Suite implements LinkedDataCryptographicSuite {
     private byte[] transform(VerifiableCredential verifiableCredential) {
 
         try {
-            String credentialString = objectMapper.writeValueAsString(verifiableCredential);
+            String credentialString = JsonSerialization.mapper.writeValueAsString(verifiableCredential);
 
             var credentialDocument = JsonDocument.of(new StringReader(credentialString));
 
@@ -104,14 +102,14 @@ public class Ed255192018Suite implements LinkedDataCryptographicSuite {
                 return writer.toString()
                         .getBytes(StandardCharsets.UTF_8);
             } else {
-                throw new SigningServiceException("Was not able to get the expanded json.");
+                throw new CredentialSignerException("Was not able to get the expanded json.");
             }
         } catch (JsonProcessingException e) {
-            throw new SigningServiceException("Was not able to serialize the credential", e);
+            throw new CredentialSignerException("Was not able to serialize the credential", e);
         } catch (JsonLdError e) {
-            throw new SigningServiceException("Was not able to create a JsonLD Document from the serialized string.", e);
+            throw new CredentialSignerException("Was not able to create a JsonLD Document from the serialized string.", e);
         } catch (UnsupportedContentException | IOException | RdfWriterException e) {
-            throw new SigningServiceException("Was not able to canonicalize the json-ld.", e);
+            throw new CredentialSignerException("Was not able to canonicalize the json-ld.", e);
         }
 
     }
@@ -121,7 +119,7 @@ public class Ed255192018Suite implements LinkedDataCryptographicSuite {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             return md.digest(transformedData);
         } catch (NoSuchAlgorithmException e) {
-            throw new SigningServiceException("Algorithm SHA-256 not supported.", e);
+            throw new CredentialSignerException("Algorithm SHA-256 not supported.", e);
         }
     }
 

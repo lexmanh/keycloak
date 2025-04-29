@@ -40,6 +40,10 @@ import org.keycloak.migration.migrators.MigrateTo23_0_0;
 import org.keycloak.migration.migrators.MigrateTo24_0_0;
 import org.keycloak.migration.migrators.MigrateTo24_0_3;
 import org.keycloak.migration.migrators.MigrateTo25_0_0;
+import org.keycloak.migration.migrators.MigrateTo26_0_0;
+import org.keycloak.migration.migrators.MigrateTo26_1_0;
+import org.keycloak.migration.migrators.MigrateTo26_2_0;
+import org.keycloak.migration.migrators.MigrateTo26_3_0;
 import org.keycloak.migration.migrators.MigrateTo2_0_0;
 import org.keycloak.migration.migrators.MigrateTo2_1_0;
 import org.keycloak.migration.migrators.MigrateTo2_2_0;
@@ -63,6 +67,7 @@ import org.keycloak.migration.migrators.Migration;
 import org.keycloak.models.Constants;
 import org.keycloak.models.DeploymentStateProvider;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.ModelException;
 import org.keycloak.models.RealmModel;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.storage.MigrationManager;
@@ -117,13 +122,19 @@ public class DefaultMigrationManager implements MigrationManager {
             new MigrateTo23_0_0(),
             new MigrateTo24_0_0(),
             new MigrateTo24_0_3(),
-            new MigrateTo25_0_0()
+            new MigrateTo25_0_0(),
+            new MigrateTo26_0_0(),
+            new MigrateTo26_1_0(),
+            new MigrateTo26_2_0(),
+            new MigrateTo26_3_0(),
     };
 
     private final KeycloakSession session;
+    private final boolean allowMigrateExistingDatabaseToSnapshot;
 
-    public DefaultMigrationManager(KeycloakSession session) {
+    public DefaultMigrationManager(KeycloakSession session, boolean allowMigrateExistingDatabaseToSnapshot) {
         this.session = session;
+        this.allowMigrateExistingDatabaseToSnapshot = allowMigrateExistingDatabaseToSnapshot;
     }
 
     @Override
@@ -136,14 +147,27 @@ public class DefaultMigrationManager implements MigrationManager {
         ModelVersion latestUpdate = migrations[migrations.length-1].getVersion();
         ModelVersion databaseVersion = model.getStoredVersion() != null ? new ModelVersion(model.getStoredVersion()) : null;
 
+        if (SNAPSHOT_VERSION.equals(currentVersion) && databaseVersion != null && databaseVersion.lessThan(SNAPSHOT_VERSION) && !allowMigrateExistingDatabaseToSnapshot) {
+            throw new ModelException("Incorrect state of migration. You are trying to run nightly server version '" + currentVersion + "' against a database, which was previously migrated to version '" + databaseVersion +
+                    "'. This indicates that you are trying to run development server version against production database, which can result in a loss or corruption of data, and also does not allow upgrading. If it is intended, " +
+                    "use the option spi-datastore-legacy-allow-migrate-existing-database-to-snapshot of the datastore provider when starting the server and explicitly set it to true.");
+        }
         if (databaseVersion == null || databaseVersion.lessThan(latestUpdate)) {
             for (Migration m : migrations) {
                 if (databaseVersion == null || databaseVersion.lessThan(m.getVersion())) {
                     if (databaseVersion != null) {
-                        logger.debugf("Migrating older model to %s", m.getVersion());
+                        logger.infof("Migrating older model to %s", m.getVersion());
                     }
                     m.migrate(session);
                 }
+            }
+        } else if (currentVersion.lessThan(databaseVersion)) {
+            if (databaseVersion.equals(SNAPSHOT_VERSION)) {
+                throw new ModelException("Incorrect state of migration. You are trying to run server version '" + currentVersion + "' against a database which was migrated to snapshot version '"
+                        + databaseVersion + "'. Databases that have been migrated to a snapshot version can't be migrated to a released version of Keycloak or to a more recent snapshot version.");
+            } else {
+                logger.warnf("Possibly incorrect state of migration. You are trying to run server version '" + currentVersion + "' against database, which was already migrated to newer version '"  +
+                        databaseVersion + "'.");
             }
         }
 
@@ -159,6 +183,7 @@ public class DefaultMigrationManager implements MigrationManager {
     public static final ModelVersion RHSSO_VERSION_7_2_KEYCLOAK_VERSION = new ModelVersion("3.4.3");
     public static final ModelVersion RHSSO_VERSION_7_3_KEYCLOAK_VERSION = new ModelVersion("4.8.3");
     public static final ModelVersion RHSSO_VERSION_7_4_KEYCLOAK_VERSION = new ModelVersion("9.0.3");
+    public static final ModelVersion SNAPSHOT_VERSION = new ModelVersion(Constants.SNAPSHOT_VERSION);
 
     private static final Map<Pattern, ModelVersion> PATTERN_MATCHER = new LinkedHashMap<>();
     static {
@@ -180,6 +205,12 @@ public class DefaultMigrationManager implements MigrationManager {
         }
         if (stored == null) {
             stored = migrations[0].getVersion();
+        } else {
+            ModelVersion currentVersion = new ModelVersion(Version.VERSION);
+            if (currentVersion.lessThan(stored)) {
+                logger.warnf("Possibly incorrect state of migration during realm import. You are running server version '" + currentVersion + "' when importing JSON file, which was created in the newer version '"  +
+                        stored + "'.");
+            }
         }
 
         for (Migration m : migrations) {

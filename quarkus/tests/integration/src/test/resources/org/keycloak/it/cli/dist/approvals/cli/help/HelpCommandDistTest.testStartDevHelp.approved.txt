@@ -25,30 +25,36 @@ Cache:
 --cache-config-file <file>
                      Defines the file from which cache configuration should be loaded from. The
                        configuration file is relative to the 'conf/' directory.
---cache-embedded-mtls-enabled <true|false>
-                     Encrypts the network communication between Keycloak servers. Default: false.
---cache-embedded-mtls-key-store-file <file>
-                     The Keystore file path. The Keystore must contain the certificate to use by
-                       the TLS protocol. By default, it lookup 'cache-mtls-keystore.p12' under
-                       conf/ directory.
---cache-embedded-mtls-key-store-password <password>
-                     The password to access the Keystore.
---cache-embedded-mtls-trust-store-file <file>
-                     The Truststore file path. It should contain the trusted certificates or the
-                       Certificate Authority that signed the certificates. By default, it lookup
-                       'cache-mtls-truststore.p12' under conf/ directory.
---cache-embedded-mtls-trust-store-password <password>
-                     The password to access the Truststore.
+--cache-embedded-authorization-max-count <max-count>
+                     The maximum number of entries that can be stored in-memory by the
+                       authorization cache.
+--cache-embedded-client-sessions-max-count <max-count>
+                     The maximum number of entries that can be stored in-memory by the
+                       clientSessions cache. Available only when embedded Infinispan clusters
+                       configured.
+--cache-embedded-crl-max-count <max-count>
+                     The maximum number of entries that can be stored in-memory by the crl cache.
+--cache-embedded-keys-max-count <max-count>
+                     The maximum number of entries that can be stored in-memory by the keys cache.
+--cache-embedded-offline-client-sessions-max-count <max-count>
+                     The maximum number of entries that can be stored in-memory by the
+                       offlineClientSessions cache. Available only when embedded Infinispan
+                       clusters configured.
+--cache-embedded-offline-sessions-max-count <max-count>
+                     The maximum number of entries that can be stored in-memory by the
+                       offlineSessions cache. Available only when embedded Infinispan clusters
+                       configured.
+--cache-embedded-realms-max-count <max-count>
+                     The maximum number of entries that can be stored in-memory by the realms cache.
+--cache-embedded-sessions-max-count <max-count>
+                     The maximum number of entries that can be stored in-memory by the sessions
+                       cache. Available only when embedded Infinispan clusters configured.
+--cache-embedded-users-max-count <max-count>
+                     The maximum number of entries that can be stored in-memory by the users cache.
 --cache-remote-host <hostname>
-                     The hostname of the remote server for the remote store configuration. It
-                       replaces the 'host' attribute of 'remote-server' tag of the configuration
-                       specified via XML file (see 'cache-config-file' option.). If the option is
-                       specified, 'cache-remote-username' and 'cache-remote-password' are required
-                       as well and the related configuration in XML file should not be present.
---cache-stack <stack>
-                     Define the default stack to use for cluster communication and node discovery.
-                       This option only takes effect if 'cache' is set to 'ispn'. Default: udp.
-                       Built-in values include: tcp, udp, kubernetes, ec2, azure, google
+                     The hostname of the external Infinispan cluster. Available only when feature
+                       'multi-site' or 'clusterless' is set. Required when feature 'multi-site' or
+                       'clusterless' is set.
 
 Config:
 
@@ -61,8 +67,10 @@ Config:
 
 Database:
 
---db <vendor>        The database vendor. Possible values are: dev-file, dev-mem, mariadb, mssql,
-                       mysql, oracle, postgres. Default: dev-file.
+--db <vendor>        The database vendor. In production mode the default value of 'dev-file' is
+                       deprecated, you should explicitly specify the db instead. Possible values
+                       are: dev-file, dev-mem, mariadb, mssql, mysql, oracle, postgres. Default:
+                       dev-file.
 --db-driver <driver> The fully qualified class name of the JDBC driver. If not set, a default
                        driver is set accordingly to the chosen database.
 --db-password <password>
@@ -134,8 +142,10 @@ Hostname v2:
 HTTP(S):
 
 --http-enabled <true|false>
-                     Enables the HTTP listener. Default: false.
---http-host <host>   The used HTTP Host. Default: 0.0.0.0.
+                     Enables the HTTP listener. Enabled by default in development mode. Typically
+                       not enabled in production unless the server is fronted by a TLS termination
+                       proxy. Default: false.
+--http-host <host>   The HTTP Host. Default: 0.0.0.0.
 --http-max-queued-requests <requests>
                      Maximum number of queued HTTP requests. Use this to shed load in an overload
                        situation. Excess requests will return a "503 Server not Available" response.
@@ -152,6 +162,11 @@ HTTP(S):
                      The file path to a server certificate or certificate chain in PEM format.
 --https-certificate-key-file <file>
                      The file path to a private key in PEM format.
+--https-certificates-reload-period <reload period>
+                     Interval on which to reload key store, trust store, and certificate files
+                       referenced by https-* options. May be a java.time.Duration value, an integer
+                       number of seconds, or an integer followed by one of [ms, h, m, s, d]. Must
+                       be greater than 30 seconds. Use -1 to disable. Default: 1h.
 --https-cipher-suites <ciphers>
                      The cipher suites to use. If none is given, a reasonable default is selected.
 --https-client-auth <auth>
@@ -164,23 +179,20 @@ HTTP(S):
                      The password of the key store file. Default: password.
 --https-key-store-type <type>
                      The type of the key store file. If not given, the type is automatically
-                       detected based on the file name. If 'fips-mode' is set to 'strict' and no
-                       value is set, it defaults to 'BCFKS'.
+                       detected based on the file extension. If 'fips-mode' is set to 'strict' and
+                       no value is set, it defaults to 'BCFKS'.
 --https-port <port>  The used HTTPS port. Default: 8443.
 --https-protocols <protocols>
                      The list of protocols to explicitly enable. Default: TLSv1.3,TLSv1.2.
 --https-trust-store-file <file>
-                     DEPRECATED. The trust store which holds the certificate information of the
-                       certificates to trust. Use the System Truststore instead, see the docs for
-                       details.
+                     The trust store which holds the certificate information of the certificates to
+                       trust.
 --https-trust-store-password <password>
-                     DEPRECATED. The password of the trust store file. Use the System Truststore
-                       instead, see the docs for details.
+                     The password of the trust store file.
 --https-trust-store-type <type>
-                     DEPRECATED. The type of the trust store file. If not given, the type is
-                       automatically detected based on the file name. If 'fips-mode' is set to
-                       'strict' and no value is set, it defaults to 'BCFKS'. Use the System
-                       Truststore instead, see the docs for details.
+                     The type of the trust store file. If not given, the type is automatically
+                       detected based on the file extension. If 'fips-mode' is set to 'strict' and
+                       no value is set, it defaults to 'BCFKS'.
 
 Health:
 
@@ -192,35 +204,45 @@ Health:
 Management:
 
 --http-management-port <port>
-                     Port of the management interface. Default: 9000. Available only when
-                       Management interface is enabled.
+                     Port of the management interface. Relevant only when something is exposed on
+                       the management interface - see the guide for details. Default: 9000.
 --http-management-relative-path <path>
                      Set the path relative to '/' for serving resources from management interface.
                        The path must start with a '/'. If not given, the value is inherited from
-                       HTTP options. Default: /. Available only when Management interface is
-                       enabled.
+                       HTTP options. Relevant only when something is exposed on the management
+                       interface - see the guide for details. Default: /.
 --https-management-certificate-file <file>
                      The file path to a server certificate or certificate chain in PEM format for
                        the management server. If not given, the value is inherited from HTTP
-                       options. Available only when Management interface is enabled.
+                       options. Relevant only when something is exposed on the management interface
+                       - see the guide for details.
 --https-management-certificate-key-file <file>
                      The file path to a private key in PEM format for the management server. If not
-                       given, the value is inherited from HTTP options. Available only when
-                       Management interface is enabled.
+                       given, the value is inherited from HTTP options. Relevant only when
+                       something is exposed on the management interface - see the guide for details.
+--https-management-certificates-reload-period <reload period>
+                     Interval on which to reload key store, trust store, and certificate files
+                       referenced by https-management-* options for the management server. May be a
+                       java.time.Duration value, an integer number of seconds, or an integer
+                       followed by one of [ms, h, m, s, d]. Must be greater than 30 seconds. Use -1
+                       to disable. If not given, the value is inherited from HTTP options. Relevant
+                       only when something is exposed on the management interface - see the guide
+                       for details. Default: 1h.
 --https-management-client-auth <auth>
                      Configures the management interface to require/request client authentication.
-                       If not given, the value is inherited from HTTP options. Possible values are:
-                       none, request, required. Default: none. Available only when Management
-                       interface is enabled.
+                       If not given, the value is inherited from HTTP options. Relevant only when
+                       something is exposed on the management interface - see the guide for
+                       details. Possible values are: none, request, required. Default: none.
 --https-management-key-store-file <file>
                      The key store which holds the certificate information instead of specifying
                        separate files for the management server. If not given, the value is
-                       inherited from HTTP options. Available only when Management interface is
-                       enabled.
+                       inherited from HTTP options. Relevant only when something is exposed on the
+                       management interface - see the guide for details.
 --https-management-key-store-password <password>
                      The password of the key store file for the management server. If not given,
-                       the value is inherited from HTTP options. Default: password. Available only
-                       when Management interface is enabled.
+                       the value is inherited from HTTP options. Relevant only when something is
+                       exposed on the management interface - see the guide for details. Default:
+                       password.
 --legacy-observability-interface <true|false>
                      DEPRECATED. If metrics/health endpoints should be exposed on the main HTTP
                        server (not recommended). If set to true, the management interface is
@@ -234,13 +256,21 @@ Metrics:
 
 Proxy:
 
---proxy <mode>       DEPRECATED. The proxy address forwarding mode if the server is behind a
-                       reverse proxy. Possible values are: none, edge, reencrypt, passthrough.
-                       Default: none. Use the following option instead: proxy-headers.
 --proxy-headers <headers>
                      The proxy headers that should be accepted by the server. Misconfiguration
                        might leave the server exposed to security vulnerabilities. Takes precedence
                        over the deprecated proxy option. Possible values are: forwarded, xforwarded.
+--proxy-protocol-enabled <true|false>
+                     Whether the server should use the HA PROXY protocol when serving requests from
+                       behind a proxy. When set to true, the remote address returned will be the
+                       one from the actual connecting client. Cannot be enabled when the
+                       `proxy-headers` is used. Default: false.
+--proxy-trusted-addresses <trusted proxies>
+                     A comma separated list of trusted proxy addresses. If set, then proxy headers
+                       from other addresses will be ignored. By default all addresses are trusted.
+                       A trusted proxy address is specified as an IP address (IPv4 or IPv6) or
+                       Classless Inter-Domain Routing (CIDR) notation. Available only when
+                       proxy-headers is set.
 
 Vault:
 
@@ -254,7 +284,13 @@ Vault:
 Logging:
 
 --log <handler>      Enable one or more log handlers in a comma-separated list. Possible values
-                       are: console, file, syslog, gelf (deprecated). Default: console.
+                       are: console, file, syslog. Default: console.
+--log-async <true|false>
+                     Indicates whether to log asynchronously to all handlers. Default: false.
+--log-console-async <true|false>
+                     Indicates whether to log asynchronously to console. If not set, value from the
+                       parent property 'log-async' is used. Default: false. Available only when
+                       Console log handler is activated.
 --log-console-color <true|false>
                      Enable or disable colors when logging to console. Default: false. Available
                        only when Console log handler is activated.
@@ -262,6 +298,13 @@ Logging:
                      The format of unstructured console log entries. If the format has spaces in
                        it, escape the value using "<format>". Default: %d{yyyy-MM-dd HH:mm:ss,SSS} %
                        -5p [%c] (%t) %s%e%n. Available only when Console log handler is activated.
+--log-console-level <level>
+                     Set the log level for the console handler. It specifies the most verbose log
+                       level for logs shown in the output. It respects levels specified in the
+                       'log-level' option, which represents the maximal verbosity for the whole
+                       logging system. For more information, check the Logging guide. Possible
+                       values are (case insensitive): off, fatal, error, warn, info, debug, trace,
+                       all. Default: all. Available only when Console log handler is activated.
 --log-console-output <output>
                      Set the log output to JSON or default (plain) unstructured logging. Possible
                        values are: default, json. Default: default. Available only when Console log
@@ -270,6 +313,16 @@ Logging:
                      The log level of the root category or a comma-separated list of individual
                        categories and their levels. For the root category, you don't need to
                        specify a category. Default: info.
+--log-level-<category> <level>
+                     The log level of a category. Takes precedence over the 'log-level' option.
+                       Possible values are (case insensitive): off, fatal, error, warn, info,
+                       debug, trace, all.
+
+Tracing:
+
+--tracing-enabled <true|false>
+                     Enables the OpenTelemetry tracing. Default: false. Available only when
+                       'opentelemetry' feature is enabled.
 
 Truststore:
 
@@ -278,8 +331,8 @@ Truststore:
                        Possible values are: ANY, WILDCARD (deprecated), STRICT (deprecated),
                        DEFAULT. Default: DEFAULT.
 --truststore-paths <truststore-paths>
-                     List of pkcs12 (p12 or pfx file extensions), PEM files, or directories
-                       containing those files that will be used as a system truststore.
+                     List of pkcs12 (p12, pfx, or pkcs12 file extensions), PEM files, or
+                       directories containing those files that will be used as a system truststore.
 
 Security:
 
@@ -289,6 +342,24 @@ Security:
                        which is by default. This option defaults to 'non-strict' when 'fips'
                        feature is enabled. Possible values are: non-strict, strict. Default:
                        disabled.
+
+Bootstrap Admin:
+
+--bootstrap-admin-client-id <client id>
+                     Client id for the temporary bootstrap admin service account. Used only when
+                       the master realm is created. Available only when bootstrap admin client
+                       secret is set. Default: temp-admin.
+--bootstrap-admin-client-secret <client secret>
+                     Client secret for the temporary bootstrap admin service account. Used only
+                       when the master realm is created. Use a non-CLI configuration option for
+                       this option if possible.
+--bootstrap-admin-password <password>
+                     Temporary bootstrap admin password. Used only when the master realm is
+                       created. Use a non-CLI configuration option for this option if possible.
+--bootstrap-admin-username <username>
+                     Temporary bootstrap admin username. Used only when the master realm is
+                       created. Available only when bootstrap admin password is set. Default:
+                       temp-admin.
 
 Do NOT start the server using this command when deploying to production.
 

@@ -1,27 +1,20 @@
 import type RealmRepresentation from "@keycloak/keycloak-admin-client/lib/defs/realmRepresentation";
+import { SelectControl, SwitchControl } from "@keycloak/keycloak-ui-shared";
 import {
   ActionGroup,
   Button,
-  FormGroup,
-  Switch,
   Tab,
   TabTitleText,
   Tabs,
 } from "@patternfly/react-core";
-import {
-  Select,
-  SelectOption,
-  SelectVariant,
-} from "@patternfly/react-core/deprecated";
-import { useEffect, useMemo, useState } from "react";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { useMemo, useState } from "react";
+import { FormProvider, useFormContext, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { HelpItem } from "@keycloak/keycloak-ui-shared";
 import { FormAccess } from "../../components/form/FormAccess";
 import { useServerInfo } from "../../context/server-info/ServerInfoProvider";
 import { useWhoAmI } from "../../context/whoami/WhoAmI";
 import { DEFAULT_LOCALE } from "../../i18n/i18n";
-import { convertToFormValues, localeToDisplayName } from "../../util";
+import { localeToDisplayName } from "../../util";
 import { EffectiveMessageBundles } from "./EffectiveMessageBundles";
 import { RealmOverrides } from "./RealmOverrides";
 
@@ -40,9 +33,8 @@ export const LocalizationTab = ({
   const { whoAmI } = useWhoAmI();
 
   const [activeTab, setActiveTab] = useState(0);
-  const { setValue, control, handleSubmit, formState } = useForm();
-  const [supportedLocalesOpen, setSupportedLocalesOpen] = useState(false);
-  const [defaultLocaleOpen, setDefaultLocaleOpen] = useState(false);
+  const form = useFormContext<RealmRepresentation>();
+  const { control, reset, handleSubmit, formState } = form;
 
   const defaultSupportedLocales = realm.supportedLocales?.length
     ? realm.supportedLocales
@@ -56,14 +48,7 @@ export const LocalizationTab = ({
     return Array.from(new Set(locales));
   }, [themeTypes]);
 
-  const setupForm = () => {
-    convertToFormValues(realm, setValue);
-    setValue("supportedLocales", defaultSupportedLocales);
-  };
-
-  useEffect(setupForm, []);
-
-  const watchSupportedLocales: string[] = useWatch({
+  const watchSupportedLocales = useWatch({
     control,
     name: "supportedLocales",
     defaultValue: defaultSupportedLocales,
@@ -78,7 +63,7 @@ export const LocalizationTab = ({
   const defaultLocales = useWatch({
     name: "defaultLocale",
     control,
-    defaultValue: realm.defaultLocale ? [realm.defaultLocale] : [],
+    defaultValue: "en",
   });
 
   return (
@@ -98,134 +83,46 @@ export const LocalizationTab = ({
           className="pf-v5-u-mt-lg pf-v5-u-ml-md"
           onSubmit={handleSubmit(save)}
         >
-          <FormGroup
-            label={t("internationalization")}
-            fieldId="kc-internationalization"
-            labelIcon={
-              <HelpItem
-                helpText={t("internationalizationHelp")}
-                fieldLabelId="internationalization"
-              />
-            }
-          >
-            <Controller
+          <FormProvider {...form}>
+            <SwitchControl
               name="internationalizationEnabled"
-              control={control}
-              defaultValue={realm.internationalizationEnabled}
-              render={({ field }) => (
-                <Switch
-                  id="kc-l-internationalization"
-                  className="pf-v5-u-mt-sm"
-                  label={t("enabled")}
-                  labelOff={t("disabled")}
-                  isChecked={field.value}
-                  data-testid={
-                    field.value
-                      ? "internationalization-enabled"
-                      : "internationalization-disabled"
-                  }
-                  onChange={field.onChange}
-                  aria-label={t("internationalization")}
-                />
-              )}
+              label={t("internationalization")}
+              labelIcon={t("internationalizationHelp")}
+              labelOn={t("enabled")}
+              labelOff={t("disabled")}
+              aria-label={t("internationalization")}
             />
-          </FormGroup>
-          {internationalizationEnabled && (
-            <>
-              <FormGroup
-                label={t("supportedLocales")}
-                fieldId="kc-l-supported-locales"
-              >
-                <Controller
+            {internationalizationEnabled && (
+              <>
+                <SelectControl
                   name="supportedLocales"
-                  control={control}
-                  defaultValue={defaultSupportedLocales}
-                  render={({ field }) => (
-                    <Select
-                      toggleId="kc-l-supported-locales"
-                      onToggle={(_event, open) => {
-                        setSupportedLocalesOpen(open);
-                      }}
-                      onSelect={(_, v) => {
-                        const option = v as string;
-                        if (field.value.includes(option)) {
-                          field.onChange(
-                            field.value.filter(
-                              (item: string) => item !== option,
-                            ),
-                          );
-                        } else {
-                          field.onChange([...field.value, option]);
-                        }
-                      }}
-                      onClear={() => {
-                        field.onChange([]);
-                      }}
-                      selections={field.value}
-                      variant={SelectVariant.typeaheadMulti}
-                      aria-label={t("supportedLocales")}
-                      isOpen={supportedLocalesOpen}
-                      placeholderText={t("selectLocales")}
-                    >
-                      {allLocales.map((locale) => (
-                        <SelectOption
-                          selected={field.value.includes(locale)}
-                          key={locale}
-                          value={locale}
-                        >
-                          {localeToDisplayName(locale, whoAmI.getLocale())}
-                        </SelectOption>
-                      ))}
-                    </Select>
-                  )}
+                  isScrollable
+                  label={t("supportedLocales")}
+                  controller={{
+                    defaultValue: defaultSupportedLocales,
+                  }}
+                  variant="typeaheadMulti"
+                  placeholderText={t("selectLocales")}
+                  options={allLocales.map((l) => ({
+                    key: l,
+                    value: localeToDisplayName(l, whoAmI.getLocale()) || l,
+                  }))}
                 />
-              </FormGroup>
-              <FormGroup
-                label={t("defaultLocale")}
-                fieldId="kc-l-default-locale"
-              >
-                <Controller
+                <SelectControl
                   name="defaultLocale"
-                  control={control}
-                  defaultValue={DEFAULT_LOCALE}
-                  render={({ field }) => (
-                    <Select
-                      toggleId="kc-default-locale"
-                      onToggle={() => setDefaultLocaleOpen(!defaultLocaleOpen)}
-                      onSelect={(_, value) => {
-                        field.onChange(value as string);
-                        setDefaultLocaleOpen(false);
-                      }}
-                      selections={
-                        field.value
-                          ? localeToDisplayName(field.value, whoAmI.getLocale())
-                          : realm.defaultLocale !== ""
-                            ? localeToDisplayName(
-                                realm.defaultLocale || DEFAULT_LOCALE,
-                                whoAmI.getLocale(),
-                              )
-                            : t("placeholderText")
-                      }
-                      variant={SelectVariant.single}
-                      aria-label={t("defaultLocale")}
-                      isOpen={defaultLocaleOpen}
-                      placeholderText={t("placeholderText")}
-                      data-testid="select-default-locale"
-                    >
-                      {watchSupportedLocales.map((locale, idx) => (
-                        <SelectOption
-                          key={`default-locale-${idx}`}
-                          value={locale}
-                        >
-                          {localeToDisplayName(locale, whoAmI.getLocale())}
-                        </SelectOption>
-                      ))}
-                    </Select>
-                  )}
+                  label={t("defaultLocale")}
+                  controller={{
+                    defaultValue: DEFAULT_LOCALE,
+                  }}
+                  data-testid="select-default-locale"
+                  options={watchSupportedLocales!.map((l) => ({
+                    key: l,
+                    value: localeToDisplayName(l, whoAmI.getLocale()) || l,
+                  }))}
                 />
-              </FormGroup>
-            </>
-          )}
+              </>
+            )}
+          </FormProvider>
           <ActionGroup>
             <Button
               variant="primary"
@@ -235,7 +132,7 @@ export const LocalizationTab = ({
             >
               {t("save")}
             </Button>
-            <Button variant="link" onClick={setupForm}>
+            <Button variant="link" onClick={() => reset(realm)}>
               {t("revert")}
             </Button>
           </ActionGroup>
@@ -248,8 +145,8 @@ export const LocalizationTab = ({
         data-testid="rs-localization-realm-overrides-tab"
       >
         <RealmOverrides
-          internationalizationEnabled={internationalizationEnabled}
-          watchSupportedLocales={watchSupportedLocales}
+          internationalizationEnabled={internationalizationEnabled || false}
+          watchSupportedLocales={watchSupportedLocales || []}
           realm={realm}
           tableData={tableData}
         />
@@ -262,7 +159,7 @@ export const LocalizationTab = ({
       >
         <EffectiveMessageBundles
           defaultSupportedLocales={defaultSupportedLocales}
-          defaultLocales={defaultLocales}
+          defaultLocales={[defaultLocales!]}
         />
       </Tab>
     </Tabs>

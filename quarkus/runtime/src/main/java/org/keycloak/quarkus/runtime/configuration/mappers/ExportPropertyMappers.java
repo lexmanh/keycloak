@@ -23,13 +23,13 @@ import org.keycloak.config.ExportOptions;
 import org.keycloak.config.Option;
 import org.keycloak.config.OptionBuilder;
 import org.keycloak.config.OptionCategory;
+import org.keycloak.exportimport.UsersExportStrategy;
 import org.keycloak.quarkus.runtime.cli.PropertyException;
 import org.keycloak.quarkus.runtime.configuration.Configuration;
 
-import java.util.Optional;
-
 import static org.keycloak.exportimport.ExportImportConfig.PROVIDER;
 import static org.keycloak.quarkus.runtime.configuration.Configuration.getOptionalValue;
+import static org.keycloak.quarkus.runtime.configuration.Configuration.isBlank;
 import static org.keycloak.quarkus.runtime.configuration.mappers.PropertyMapper.fromOption;
 
 public final class ExportPropertyMappers {
@@ -67,7 +67,7 @@ public final class ExportPropertyMappers {
                         .build(),
                 fromOption(ExportOptions.USERS)
                         .to("kc.spi-export-dir-users-export-strategy")
-                        .isEnabled(ExportPropertyMappers::isDirProvider)
+                        .addValidator(ExportPropertyMappers::validateUsersUsage)
                         .paramLabel("strategy")
                         .build(),
                 fromOption(ExportOptions.USERS_PER_FILE)
@@ -76,6 +76,16 @@ public final class ExportPropertyMappers {
                         .paramLabel("number")
                         .build()
         };
+    }
+
+    private static void validateUsersUsage(PropertyMapper<?> mapper, ConfigValue value) {
+        if (!isBlank(ExportOptions.FILE) && isBlank(ExportOptions.DIR)) {
+            var sameFileIsSpecified = UsersExportStrategy.SAME_FILE.toString().toLowerCase().equals(value.getValue());
+
+            if (!sameFileIsSpecified) {
+                throw new PropertyException("Property '--users' can be used only when exporting to a directory, or value set to 'same_file' when exporting to a file.");
+            }
+        }
     }
 
     public static void validateConfig() {
@@ -105,10 +115,10 @@ public final class ExportPropertyMappers {
                 .isPresent();
     }
 
-    private static Optional<String> transformExporter(Optional<String> option, ConfigSourceInterceptorContext context) {
+    private static String transformExporter(String option, ConfigSourceInterceptorContext context) {
         ConfigValue exporter = context.proceed(EXPORTER_PROPERTY);
         if (exporter != null) {
-            return Optional.of(exporter.getValue());
+            return exporter.getValue();
         }
 
         var file = Configuration.getOptionalValue("kc.spi-export-single-file-file").map(f -> SINGLE_FILE);
@@ -119,7 +129,7 @@ public final class ExportPropertyMappers {
         // Only one option can be specified
         boolean xor = file.isPresent() ^ dir.isPresent();
 
-        return xor ? file.or(() -> dir) : Optional.empty();
+        return xor ? file.or(() -> dir).get() : null;
     }
 
 }

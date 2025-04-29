@@ -12,6 +12,7 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionTaskWithResult;
 import org.keycloak.models.KeycloakTransaction;
 import org.keycloak.models.ModelDuplicateException;
+import org.keycloak.models.ModelException;
 import org.keycloak.models.ModelIllegalStateException;
 import org.keycloak.models.ModelValidationException;
 import org.keycloak.models.RealmModel;
@@ -20,6 +21,7 @@ import org.keycloak.representations.idm.OAuth2ErrorRepresentation;
 import org.keycloak.services.managers.RealmManager;
 import org.keycloak.services.messages.Messages;
 import org.keycloak.theme.Theme;
+import org.keycloak.theme.beans.AdvancedMessageFormatterMethod;
 import org.keycloak.theme.beans.LocaleBean;
 import org.keycloak.theme.beans.MessageBean;
 import org.keycloak.theme.beans.MessageFormatterMethod;
@@ -75,12 +77,13 @@ public class KeycloakErrorHandler implements ExceptionMapper<Throwable> {
         KeycloakTransaction tx = session.getTransactionManager();
         tx.setRollbackOnly();
 
-        int statusCode = getStatusCode(throwable);
+        Response.Status responseStatus = getResponseStatus(throwable);
+        boolean isServerError = responseStatus.getFamily().equals(Response.Status.Family.SERVER_ERROR);
 
-        if (statusCode >= 500 && statusCode <= 599) {
+        if (isServerError) {
             logger.error(UNCAUGHT_SERVER_ERROR_TEXT, throwable);
         } else {
-            logger.debugv(throwable, ERROR_RESPONSE_TEXT, statusCode);
+            logger.debugv(throwable, ERROR_RESPONSE_TEXT, responseStatus);
         }
 
         HttpHeaders headers = session.getContext().getRequestHeaders();
@@ -89,9 +92,15 @@ public class KeycloakErrorHandler implements ExceptionMapper<Throwable> {
             OAuth2ErrorRepresentation error = new OAuth2ErrorRepresentation();
 
             error.setError(getErrorCode(throwable));
-            error.setErrorDescription("For more on this error consult the server log at the debug level.");
+            if (throwable.getCause() instanceof ModelException) {
+                error.setErrorDescription(throwable.getMessage());
+            } else if (throwable instanceof JsonProcessingException || throwable.getCause() instanceof JsonProcessingException) {
+                error.setErrorDescription("Cannot parse the JSON");
+            } else if (isServerError) {
+                error.setErrorDescription("For more on this error consult the server log.");
+            }
 
-            return Response.status(statusCode)
+            return Response.status(responseStatus)
                     .header(HttpHeaders.CONTENT_TYPE, jakarta.ws.rs.core.MediaType.APPLICATION_JSON_TYPE.toString())
                     .entity(error)
                     .build();
@@ -105,36 +114,36 @@ public class KeycloakErrorHandler implements ExceptionMapper<Throwable> {
             Locale locale = session.getContext().resolveLocale(null);
 
             FreeMarkerProvider freeMarker = session.getProvider(FreeMarkerProvider.class);
-            Map<String, Object> attributes = initAttributes(session, realm, theme, locale, statusCode);
+            Map<String, Object> attributes = initAttributes(session, realm, theme, locale, responseStatus);
 
             String templateName = "error.ftl";
 
             String content = freeMarker.processTemplate(attributes, templateName, theme);
-            return Response.status(statusCode).type(MediaType.TEXT_HTML_UTF_8_TYPE).entity(content).build();
+            return Response.status(responseStatus).type(MediaType.TEXT_HTML_UTF_8_TYPE).entity(content).build();
         } catch (Throwable t) {
             logger.error("Failed to create error page", t);
             return Response.serverError().build();
         }
     }
 
-    private static int getStatusCode(Throwable throwable) {
-        int status = Response.Status.INTERNAL_SERVER_ERROR.getStatusCode();
-        if (throwable instanceof WebApplicationException) {
-            WebApplicationException ex = (WebApplicationException) throwable;
-            status = ex.getResponse().getStatus();
-        }
-        if (throwable instanceof JsonProcessingException
-                || throwable instanceof ModelValidationException) {
-            status = Response.Status.BAD_REQUEST.getStatusCode();
-        }
-        if (throwable instanceof ModelIllegalStateException) {
-            status = Response.Status.INTERNAL_SERVER_ERROR.getStatusCode();
-        }
-        if (throwable instanceof ModelDuplicateException) {
-            status = Response.Status.CONFLICT.getStatusCode();
+    private static Response.Status getResponseStatus(Throwable throwable) {
+        if (throwable instanceof WebApplicationException ex) {
+            return Response.Status.fromStatusCode(ex.getResponse().getStatus());
         }
 
-        return status;
+        if (throwable instanceof JsonProcessingException || throwable instanceof ModelValidationException) {
+            return Response.Status.BAD_REQUEST;
+        }
+
+        if (throwable instanceof ModelIllegalStateException) {
+            return Response.Status.INTERNAL_SERVER_ERROR;
+        }
+
+        if (throwable instanceof ModelDuplicateException) {
+            return Response.Status.CONFLICT;
+        }
+
+        return Response.Status.INTERNAL_SERVER_ERROR;
     }
 
     private static String getErrorCode(Throwable throwable) {
@@ -172,30 +181,36 @@ public class KeycloakErrorHandler implements ExceptionMapper<Throwable> {
         return realm;
     }
 
-    private static Map<String, Object> initAttributes(KeycloakSession session, RealmModel realm, Theme theme, Locale locale, int statusCode) throws IOException {
+    private static Map<String, Object> initAttributes(KeycloakSession session, RealmModel realm, Theme theme, Locale locale, Response.Status responseStatus) throws IOException {
         Map<String, Object> attributes = new HashMap<>();
-        Properties messagesBundle = theme.getMessages(locale);
+        Properties messagesBundle = theme.getEnhancedMessages(realm, locale);
 
-        attributes.put("statusCode", statusCode);
+        final var localeBean =  new LocaleBean(realm, locale, session.getContext().getUri().getRequestUriBuilder(), messagesBundle);
+        final var lang = realm.isInternationalizationEnabled() ? localeBean.getCurrentLanguageTag() : Locale.ENGLISH.toLanguageTag();
+
+        attributes.put("pageId", "error");
+        attributes.put("statusCode", responseStatus.getStatusCode());
 
         attributes.put("realm", realm);
         attributes.put("url", new UrlBean(realm, theme, session.getContext().getUri().getBaseUri(), null));
-        attributes.put("locale", new LocaleBean(realm, locale, session.getContext().getUri().getRequestUriBuilder(), messagesBundle));
+        attributes.put("locale", localeBean);
+        attributes.put("lang", lang);
 
-
-        String errorKey = statusCode == 404 ? Messages.PAGE_NOT_FOUND : Messages.INTERNAL_SERVER_ERROR;
+        String errorKey = responseStatus == Response.Status.NOT_FOUND ? Messages.PAGE_NOT_FOUND : Messages.INTERNAL_SERVER_ERROR;
         String errorMessage = messagesBundle.getProperty(errorKey);
 
         attributes.put("message", new MessageBean(errorMessage, MessageType.ERROR));
+        // Default fallback in case an error occurs determining the dark mode later on.
+        attributes.put("darkMode", true);
+
+        attributes.put("msg", new MessageFormatterMethod(locale, messagesBundle));
+        attributes.put("advancedMsg", new AdvancedMessageFormatterMethod(locale, messagesBundle));
 
         try {
-            attributes.put("msg", new MessageFormatterMethod(locale, theme.getMessages(locale)));
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        try {
-            attributes.put("properties", theme.getProperties());
+            Properties properties = theme.getProperties();
+            attributes.put("properties", properties);
+            attributes.put("darkMode", "true".equals(properties.getProperty("darkMode"))
+                    && realm.getAttribute("darkMode", true));
         } catch (IOException e) {
             e.printStackTrace();
         }

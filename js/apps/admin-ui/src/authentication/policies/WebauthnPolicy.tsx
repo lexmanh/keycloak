@@ -10,7 +10,6 @@ import {
   Text,
   TextContent,
 } from "@patternfly/react-core";
-import { SelectVariant } from "@patternfly/react-core/deprecated";
 import { QuestionCircleIcon } from "@patternfly/react-icons";
 import { useEffect } from "react";
 import { FormProvider, useForm } from "react-hook-form";
@@ -22,14 +21,14 @@ import {
   TextControl,
   useHelp,
 } from "@keycloak/keycloak-ui-shared";
-import { adminClient } from "../../admin-client";
-import { useAlerts } from "../../components/alert/Alerts";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import { FormAccess } from "../../components/form/FormAccess";
 import { MultiLineInput } from "../../components/multi-line-input/MultiLineInput";
 import { TimeSelectorControl } from "../../components/time-selector/TimeSelectorControl";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import { convertFormValuesToObject, convertToFormValues } from "../../util";
 
+import { useAdminClient } from "../../admin-client";
 import "./webauthn-policy.css";
 
 const SIGNATURE_ALGORITHMS = [
@@ -67,6 +66,7 @@ const USER_VERIFY = [
 type WeauthnSelectProps = {
   name: string;
   label: string;
+  labelIcon?: string;
   options: readonly string[];
   labelPrefix?: string;
   isMultiSelect?: boolean;
@@ -75,6 +75,7 @@ type WeauthnSelectProps = {
 const WebauthnSelect = ({
   name,
   label,
+  labelIcon,
   options,
   labelPrefix,
   isMultiSelect = false,
@@ -83,16 +84,14 @@ const WebauthnSelect = ({
   return (
     <SelectControl
       name={name}
-      label={t(label)}
-      variant={
-        isMultiSelect ? SelectVariant.typeaheadMulti : SelectVariant.single
-      }
+      label={label}
+      labelIcon={labelIcon}
+      variant={isMultiSelect ? "typeaheadMulti" : "single"}
       controller={{ defaultValue: options[0] }}
       options={options.map((option) => ({
         key: option,
         value: labelPrefix ? t(`${labelPrefix}.${option}`) : option,
       }))}
-      typeAheadAriaLabel={t(name)}
     />
   );
 };
@@ -108,6 +107,8 @@ export const WebauthnPolicy = ({
   realmUpdated,
   isPasswordLess = false,
 }: WebauthnPolicyProps) => {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
   const { realm: realmName } = useRealm();
@@ -163,11 +164,12 @@ export const WebauthnPolicy = ({
             name={`${namePrefix}RpEntityName`}
             label={t("webAuthnPolicyRpEntityName")}
             labelIcon={t("webAuthnPolicyRpEntityNameHelp")}
-            rules={{ required: { value: true, message: t("required") } }}
+            rules={{ required: t("required") }}
           />
           <WebauthnSelect
             name={`${namePrefix}SignatureAlgorithms`}
-            label="webAuthnPolicySignatureAlgorithms"
+            label={t("webAuthnPolicySignatureAlgorithms")}
+            labelIcon={t("webAuthnPolicySignatureAlgorithmsHelp")}
             options={SIGNATURE_ALGORITHMS}
             isMultiSelect
           />
@@ -178,32 +180,36 @@ export const WebauthnPolicy = ({
           />
           <WebauthnSelect
             name={`${namePrefix}AttestationConveyancePreference`}
-            label="webAuthnPolicyAttestationConveyancePreference"
+            label={t("webAuthnPolicyAttestationConveyancePreference")}
+            labelIcon={t("webAuthnPolicyAttestationConveyancePreferenceHelp")}
             options={ATTESTATION_PREFERENCE}
             labelPrefix="attestationPreference"
           />
           <WebauthnSelect
             name={`${namePrefix}AuthenticatorAttachment`}
-            label="webAuthnPolicyAuthenticatorAttachment"
+            label={t("webAuthnPolicyAuthenticatorAttachment")}
+            labelIcon={t("webAuthnPolicyAuthenticatorAttachmentHelp")}
             options={AUTHENTICATOR_ATTACHMENT}
             labelPrefix="authenticatorAttachment"
           />
           <WebauthnSelect
             name={`${namePrefix}RequireResidentKey`}
-            label="webAuthnPolicyRequireResidentKey"
+            label={t("webAuthnPolicyRequireResidentKey")}
+            labelIcon={t("webAuthnPolicyRequireResidentKeyHelp")}
             options={RESIDENT_KEY_OPTIONS}
             labelPrefix="residentKey"
           />
           <WebauthnSelect
             name={`${namePrefix}UserVerificationRequirement`}
-            label="webAuthnPolicyUserVerificationRequirement"
+            label={t("webAuthnPolicyUserVerificationRequirement")}
+            labelIcon={t("webAuthnPolicyUserVerificationRequirementHelp")}
             options={USER_VERIFY}
             labelPrefix="userVerify"
           />
           <TimeSelectorControl
             name={`${namePrefix}CreateTimeout`}
             label={t("webAuthnPolicyCreateTimeout")}
-            labelIcon={t("otpPolicyPeriodHelp")}
+            labelIcon={t("webAuthnPolicyCreateTimeoutHelp")}
             units={["second", "minute", "hour"]}
             controller={{
               defaultValue: 0,

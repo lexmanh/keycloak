@@ -82,22 +82,22 @@ export class ExecutionList {
 
   findExecution(
     index: number,
-    currentIndex: number | undefined = 0,
+    current: { index: number } = { index: 0 },
     list?: ExpandableExecution[],
   ): ExpandableExecution | undefined {
     const l = list || this.expandableList;
     for (let i = 0; i < l.length; i++) {
       const ex = l[i];
-      if (currentIndex === index) {
+
+      if (current.index === index) {
         return ex;
       }
-      currentIndex++;
-      if (ex.executionList) {
-        const found = this.findExecution(index, currentIndex, ex.executionList);
+      current.index++;
+      if (ex.executionList && !ex.isCollapsed) {
+        const found = this.findExecution(index, current, ex.executionList);
         if (found) {
           return found;
         }
-        currentIndex += ex.executionList.length;
       }
     }
     return undefined;

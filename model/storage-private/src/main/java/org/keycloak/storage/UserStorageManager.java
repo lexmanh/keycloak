@@ -32,7 +32,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import io.opentelemetry.api.trace.StatusCode;
 import org.jboss.logging.Logger;
+import org.keycloak.common.Profile;
 import org.keycloak.common.constants.ServiceAccountConstants;
 import org.keycloak.common.util.reflections.Types;
 import org.keycloak.component.ComponentFactory;
@@ -62,10 +64,10 @@ import org.keycloak.models.cache.OnUserCache;
 import org.keycloak.models.cache.UserCache;
 import org.keycloak.models.utils.ComponentUtil;
 import org.keycloak.models.utils.ReadOnlyUserModelDelegate;
+import org.keycloak.organization.OrganizationProvider;
 import org.keycloak.storage.client.ClientStorageProvider;
 import org.keycloak.storage.datastore.DefaultDatastoreProvider;
 import org.keycloak.storage.federated.UserFederatedStorageProvider;
-import org.keycloak.storage.federated.UserGroupMembershipFederatedStorage;
 import org.keycloak.storage.managers.UserStorageSyncManager;
 import org.keycloak.storage.user.ImportedUserValidation;
 import org.keycloak.storage.user.UserBulkUpdateProvider;
@@ -74,6 +76,7 @@ import org.keycloak.storage.user.UserLookupProvider;
 import org.keycloak.storage.user.UserQueryMethodsProvider;
 import org.keycloak.storage.user.UserQueryProvider;
 import org.keycloak.storage.user.UserRegistrationProvider;
+import org.keycloak.tracing.TracingProvider;
 import org.keycloak.userprofile.AttributeMetadata;
 import org.keycloak.userprofile.UserProfileDecorator;
 import org.keycloak.userprofile.UserProfileMetadata;
@@ -111,23 +114,35 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
      * @return
      */
     protected UserModel importValidation(RealmModel realm, UserModel user) {
-        if (user == null || user.getFederationLink() == null) return user;
+
+        if (isReadOnlyOrganizationMember(user)) {
+            if (user instanceof CachedUserModel cachedUserModel) {
+                cachedUserModel.invalidate();
+            }
+            return new ReadOnlyUserModelDelegate(user, false);
+        }
+
+        if (user == null || !user.isFederated()) return user;
 
         UserStorageProviderModel model = getStorageProviderModel(realm, user.getFederationLink());
         if (model == null) {
             // remove linked user with unknown storage provider.
             logger.debugf("Removed user with federation link of unknown storage provider '%s'", user.getUsername());
+            deleteInvalidUserCache(realm, user);
             deleteInvalidUser(realm, user);
             return null;
         }
 
         if (!model.isEnabled()) {
-            return new ReadOnlyUserModelDelegate(user) {
-                @Override
-                public boolean isEnabled() {
-                    return false;
-                }
-            };
+            if (user instanceof CachedUserModel cachedUserModel) {
+                cachedUserModel.invalidate();
+            }
+            return new ReadOnlyUserModelDelegate(user, false);
+        }
+
+        if (user instanceof CachedUserModel) {
+            // if the user is cached do not validate import for the cached configured time
+            return user;
         }
 
         ImportedUserValidation importedUserValidation = getStorageProviderInstance(model, ImportedUserValidation.class, true);
@@ -135,11 +150,16 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
 
         UserModel validated = importedUserValidation.validate(realm, user);
         if (validated == null) {
-            deleteInvalidUser(realm, user);
-            return null;
-        } else {
-            return validated;
+            deleteInvalidUserCache(realm, user);
+            if (model.isRemoveInvalidUsersEnabled()) {
+                deleteInvalidUser(realm, user);
+                return null;
+            }
+
+            return new ReadOnlyUserModelDelegate(user, false);
         }
+
+        return validated;
     }
 
     private static <T> Stream<T> getCredentialProviders(KeycloakSession session, Class<T> type) {
@@ -159,7 +179,21 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
         for (CredentialAuthentication credentialAuthentication : credentialAuthenticationStream
                 .filter(credentialAuthentication -> credentialAuthentication.supportsCredentialAuthenticationFor(input.getType()))
                 .collect(Collectors.toList())) {
-            CredentialValidationOutput validationOutput = credentialAuthentication.authenticate(realm, input);
+            CredentialValidationOutput validationOutput = session.getProvider(TracingProvider.class).trace(credentialAuthentication.getClass(), "authenticate",
+                    span -> {
+                        CredentialValidationOutput output = credentialAuthentication.authenticate(realm, input);
+                        if (span.isRecording()) {
+                            if (output != null) {
+                                CredentialValidationOutput.Status status = output.getAuthStatus();
+                                span.setAttribute("kc.validationStatus", status.name());
+                                if (status == CredentialValidationOutput.Status.FAILED) {
+                                    span.setStatus(StatusCode.ERROR);
+                                }
+                            }
+                        }
+                        return output;
+                    }
+            );
             if (Objects.nonNull(validationOutput)) {
                 CredentialValidationOutput.Status status = validationOutput.getAuthStatus();
                 if (status == CredentialValidationOutput.Status.AUTHENTICATED || status == CredentialValidationOutput.Status.CONTINUE || status == CredentialValidationOutput.Status.FAILED) {
@@ -176,14 +210,16 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
         return result;
     }
 
-    protected void deleteInvalidUser(final RealmModel realm, final UserModel user) {
-        String userId = user.getId();
-        String userName = user.getUsername();
+    protected void deleteInvalidUserCache(final RealmModel realm, final UserModel user) {
         UserCache userCache = UserStorageUtil.userCache(session);
         if (userCache != null) {
             userCache.evict(realm, user);
         }
+    }
 
+    protected void deleteInvalidUser(final RealmModel realm, final UserModel user) {
+        String userId = user.getId();
+        String userName = user.getUsername();
         // This needs to be running in separate transaction because removing the user may end up with throwing
         // PessimisticLockException which also rollbacks Jpa transaction, hence when it is running in current transaction
         // it will become not usable for all consequent jpa calls. It will end up with Transaction is in rolled back
@@ -191,6 +227,7 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
         runJobInTransaction(session.getKeycloakSessionFactory(), session -> {
             RealmModel realmModel = session.realms().getRealm(realm.getId());
             if (realmModel == null) return;
+            session.getContext().setRealm(realm);
             UserModel deletedUser = UserStoragePrivateUtil.userLocalStorage(session).getUserById(realmModel, userId);
             if (deletedUser != null) {
                 try {
@@ -205,7 +242,6 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
             }
         });
     }
-
 
     protected Stream<UserModel> importValidation(RealmModel realm, Stream<UserModel> users) {
         return users.map(user -> importValidation(realm, user)).filter(Objects::nonNull);
@@ -272,13 +308,13 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
                     }
 
                     logger.tracef("This provider (%s) cannot provide enough users to pass firstResult so we are going to filter it out and change "
-                            + "firstResult for next provider: %d - %d = %d", provider.getClass().getSimpleName(), 
+                            + "firstResult for next provider: %d - %d = %d", provider.getClass().getSimpleName(),
                             currentFirst.get(), expectedNumberOfUsersForProvider, currentFirst.get() - expectedNumberOfUsersForProvider);
                     currentFirst.set((int) (currentFirst.get() - expectedNumberOfUsersForProvider));
                     return false;
                 })
-                // collecting stream of providers to ensure the filtering (above) is evaluated before we move forward to actual querying    
-                .collect(Collectors.toList()).stream(); 
+                // collecting stream of providers to ensure the filtering (above) is evaluated before we move forward to actual querying
+                .collect(Collectors.toList()).stream();
         }
 
         if (needsAdditionalFirstResultFiltering.get() && currentFirst.get() > 0) {
@@ -344,12 +380,13 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
             getFederatedStorage().preRemove(realm, user);
         }
 
+        publishUserPreRemovedEvent(realm, user);
+
         StorageId storageId = new StorageId(user.getId());
 
         if (storageId.getProviderId() == null) {
-            String federationLink = user.getFederationLink();
-            boolean linkRemoved = federationLink == null || Optional.ofNullable(
-                    getStorageProviderInstance(realm, federationLink, UserRegistrationProvider.class))
+            boolean linkRemoved = !user.isFederated() || Optional.ofNullable(
+                    getStorageProviderInstance(realm, user.getFederationLink(), UserRegistrationProvider.class))
                     .map(provider -> provider.removeUser(realm, user))
                     .orElse(false);
 
@@ -413,15 +450,22 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
     @Override
     public Stream<UserModel> getGroupMembersStream(final RealmModel realm, final GroupModel group, Integer firstResult, Integer maxResults) {
         Stream<UserModel> results = query((provider, firstResultInQuery, maxResultsInQuery) -> {
-            if (provider instanceof UserQueryMethodsProvider) {
-                return ((UserQueryMethodsProvider)provider).getGroupMembersStream(realm, group, firstResultInQuery, maxResultsInQuery);
+                    if (provider instanceof UserQueryMethodsProvider) {
+                        return ((UserQueryMethodsProvider) provider).getGroupMembersStream(realm, group, firstResultInQuery, maxResultsInQuery);
 
-            } else if (provider instanceof UserFederatedStorageProvider) {
-                return ((UserFederatedStorageProvider)provider).getMembershipStream(realm, group, firstResultInQuery, maxResultsInQuery).
-                        map(id -> getUserById(realm, id));
-           }
-            return Stream.empty();
-        }, realm, firstResult, maxResults);
+                    } else if (provider instanceof UserFederatedStorageProvider) {
+                        return ((UserFederatedStorageProvider) provider).getMembershipStream(realm, group, firstResultInQuery, maxResultsInQuery).
+                                map(id -> getUserById(realm, id));
+                    }
+                    return Stream.empty();
+                },
+                (provider, firstResultInQuery, maxResultsInQuery) -> {
+                    if (provider instanceof UserCountMethodsProvider) {
+                        return ((UserCountMethodsProvider) provider).getUsersCount(realm, Set.of(group.getId()));
+                    }
+                    return 0;
+                },
+                realm, firstResult, maxResults);
 
         return importValidation(realm, results);
     }
@@ -906,5 +950,45 @@ public class UserStorageManager extends AbstractStorageManager<UserStorageProvid
         }
 
         return Collections.emptyList();
+    }
+
+    private boolean isReadOnlyOrganizationMember(UserModel delegate) {
+        if (delegate == null) {
+            return false;
+        }
+
+        if (!Profile.isFeatureEnabled(Profile.Feature.ORGANIZATION)) {
+            return false;
+        }
+
+        OrganizationProvider organizationProvider = session.getProvider(OrganizationProvider.class);
+
+        if (organizationProvider.count() == 0) {
+            return false;
+        }
+
+        // check if provider is enabled and user is managed member of a disabled organization OR provider is disabled and user is managed member
+        return organizationProvider.getByMember(delegate)
+                .anyMatch((org) -> (organizationProvider.isEnabled() && org.isManaged(delegate) && !org.isEnabled()) ||
+                        (!organizationProvider.isEnabled() && org.isManaged(delegate)));
+    }
+
+    private void publishUserPreRemovedEvent(RealmModel realm, UserModel user) {
+        session.getKeycloakSessionFactory().publish(new UserModel.UserPreRemovedEvent() {
+            @Override
+            public RealmModel getRealm() {
+                return realm;
+            }
+
+            @Override
+            public UserModel getUser() {
+                return user;
+            }
+
+            @Override
+            public KeycloakSession getKeycloakSession() {
+                return session;
+            }
+        });
     }
 }

@@ -12,15 +12,6 @@
     <description />
     <packaging>jar</packaging>
 
-    <properties>
-        <dir.common>src/main/resources/theme/keycloak/common/resources</dir.common>
-        <!-- ignore folders for incremental builds by the maven build cache plugin -->
-        <maven.build.cache.exclude.value.1>src/main/resources/theme/keycloak/common/resources/node_modules</maven.build.cache.exclude.value.1>
-        <maven.build.cache.exclude.value.2>src/main/resources/theme/keycloak/common/resources/vendor</maven.build.cache.exclude.value.2>
-        <maven.build.cache.exclude.value.3>src/main/resources/theme/keycloak.v2/welcome/node_modules</maven.build.cache.exclude.value.3>
-        <maven.build.cache.exclude.value.4>src/main/resources/theme/keycloak.v2/welcome/resources/vendor</maven.build.cache.exclude.value.4>
-    </properties>
-
     <dependencies>
         <dependency>
             <groupId>org.keycloak</groupId>
@@ -30,6 +21,10 @@
             <groupId>org.keycloak</groupId>
             <artifactId>keycloak-account-ui</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.keycloak</groupId>
+            <artifactId>keycloak-themes-vendor</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
@@ -38,22 +33,22 @@
                 <directory>src/main/resources</directory>
             </resource>
         </resources>
-
         <plugins>
             <plugin>
-                <artifactId>maven-source-plugin</artifactId>
-                <configuration>
-                    <excludes>
-                        <exclude>**/node_modules/**</exclude>
-                    </excludes>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>com.github.eirslett</groupId>
-                <artifactId>frontend-maven-plugin</artifactId>
-                <configuration>
-                    <workingDirectory>src/main/resources/theme/keycloak/common/resources</workingDirectory>
-                </configuration>
+                <groupId>org.keycloak</groupId>
+                <artifactId>theme-verifier-maven-plugin</artifactId>
+                <version>${project.version}</version>
+                <executions>
+                    <execution>
+                        <id>verify-theme</id>
+                        <goals>
+                            <goal>verify-theme</goal>
+                        </goals>
+                        <configuration>
+                            <validateMessageFormatQuotes>true</validateMessageFormatQuotes>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
@@ -75,5 +70,4 @@
             </build>
         </profile>
     </profiles>
-
 </project>

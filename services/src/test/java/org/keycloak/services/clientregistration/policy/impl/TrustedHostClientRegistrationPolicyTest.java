@@ -16,8 +16,9 @@
  */
 package org.keycloak.services.clientregistration.policy.impl;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -53,8 +54,8 @@ public class TrustedHostClientRegistrationPolicyTest {
         ComponentModel model = createComponentModel("localhost");
         TrustedHostClientRegistrationPolicy policy = (TrustedHostClientRegistrationPolicy) factory.create(session, model);
 
-        policy.verifyHost("127.0.0.1");
-        Assert.assertThrows(ClientRegistrationPolicyException.class, () -> policy.verifyHost("10.0.0.1"));
+        assertTrue(policy.verifyHost("127.0.0.1"));
+        assertFalse(policy.verifyHost("10.0.0.1"));
         policy.checkURLTrusted("https://localhost", policy.getTrustedHosts(), policy.getTrustedDomains());
         Assert.assertThrows(ClientRegistrationPolicyException.class, () -> policy.checkURLTrusted("https://otherhost",
                 policy.getTrustedHosts(), policy.getTrustedDomains()));
@@ -66,8 +67,8 @@ public class TrustedHostClientRegistrationPolicyTest {
         ComponentModel model = createComponentModel("*.localhost");
         TrustedHostClientRegistrationPolicy policy = (TrustedHostClientRegistrationPolicy) factory.create(session, model);
 
-        policy.verifyHost("127.0.0.1");
-        Assert.assertThrows(ClientRegistrationPolicyException.class, () -> policy.verifyHost("10.0.0.1"));
+        assertTrue(policy.verifyHost("127.0.0.1"));
+        assertFalse(policy.verifyHost("10.0.0.1"));
         policy.checkURLTrusted("https://localhost", policy.getTrustedHosts(), policy.getTrustedDomains());
         policy.checkURLTrusted("https://other.localhost", policy.getTrustedHosts(), policy.getTrustedDomains());
         Assert.assertThrows(ClientRegistrationPolicyException.class, () -> policy.checkURLTrusted("https://otherlocalhost",
@@ -80,8 +81,8 @@ public class TrustedHostClientRegistrationPolicyTest {
         ComponentModel model = createComponentModel("127.0.0.1");
         TrustedHostClientRegistrationPolicy policy = (TrustedHostClientRegistrationPolicy) factory.create(session, model);
 
-        policy.verifyHost("127.0.0.1");
-        Assert.assertThrows(ClientRegistrationPolicyException.class, () -> policy.verifyHost("10.0.0.1"));
+        assertTrue(policy.verifyHost("127.0.0.1"));
+        assertFalse(policy.verifyHost("10.0.0.1"));
         policy.checkURLTrusted("https://127.0.0.1", policy.getTrustedHosts(), policy.getTrustedDomains());
         Assert.assertThrows(ClientRegistrationPolicyException.class, () -> policy.checkURLTrusted("https://localhost",
                 policy.getTrustedHosts(), policy.getTrustedDomains()));
@@ -98,20 +99,6 @@ public class TrustedHostClientRegistrationPolicyTest {
         policy.checkURLTrusted("https://www.googlebot.com", policy.getTrustedHosts(), policy.getTrustedDomains());
         policy.checkURLTrusted("https://googlebot.com", policy.getTrustedHosts(), policy.getTrustedDomains());
         Assert.assertThrows(ClientRegistrationPolicyException.class, () -> policy.checkURLTrusted("https://www.othergooglebot.com",
-                policy.getTrustedHosts(), policy.getTrustedDomains()));
-    }
-
-    @Test
-    public void testGithubDomain() throws UnknownHostException {
-        TrustedHostClientRegistrationPolicyFactory factory = new TrustedHostClientRegistrationPolicyFactory();
-        ComponentModel model = createComponentModel("*.github.com");
-        TrustedHostClientRegistrationPolicy policy = (TrustedHostClientRegistrationPolicy) factory.create(session, model);
-
-        policy.verifyHost(InetAddress.getByName("www.github.com").getHostAddress());
-        policy.verifyHost(InetAddress.getByName("github.com").getHostAddress());
-        policy.checkURLTrusted("https://www.github.com", policy.getTrustedHosts(), policy.getTrustedDomains());
-        policy.checkURLTrusted("https://github.com", policy.getTrustedHosts(), policy.getTrustedDomains());
-        Assert.assertThrows(ClientRegistrationPolicyException.class, () -> policy.checkURLTrusted("https://othergithub.com",
                 policy.getTrustedHosts(), policy.getTrustedDomains()));
     }
 

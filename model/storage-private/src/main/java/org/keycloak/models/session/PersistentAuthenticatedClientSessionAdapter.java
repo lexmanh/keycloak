@@ -17,6 +17,7 @@
 
 package org.keycloak.models.session;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientModel;
@@ -124,8 +125,11 @@ public class PersistentAuthenticatedClientSessionAdapter implements Authenticate
     // Write updated model with latest serialized data
     public PersistentClientSessionModel getUpdatedModel() {
         try {
-            String updatedData = JsonSerialization.writeValueAsString(getData());
-            this.model.setData(updatedData);
+            if (data != null) {
+                // If data hasn't been initialized, it hasn't been touched and is unchanged. So need to deserialize and serialize it
+                String updatedData = JsonSerialization.writeValueAsString(getData());
+                this.model.setData(updatedData);
+            }
         } catch (IOException ioe) {
             throw new ModelException("Error persisting session", ioe);
         }
@@ -186,26 +190,6 @@ public class PersistentAuthenticatedClientSessionAdapter implements Authenticate
             return;
         }
         model.setTimestamp(timestamp);
-    }
-
-    @Override
-    public String getCurrentRefreshToken() {
-        return getData().getCurrentRefreshToken();
-    }
-
-    @Override
-    public void setCurrentRefreshToken(String currentRefreshToken) {
-        getData().setCurrentRefreshToken(currentRefreshToken);
-    }
-
-    @Override
-    public int getCurrentRefreshTokenUseCount() {
-        return getData().getCurrentRefreshTokenUseCount();
-    }
-
-    @Override
-    public void setCurrentRefreshTokenUseCount(int currentRefreshTokenUseCount) {
-        getData().setCurrentRefreshTokenUseCount(currentRefreshTokenUseCount);
     }
 
     @Override
@@ -277,6 +261,7 @@ public class PersistentAuthenticatedClientSessionAdapter implements Authenticate
         return getId();
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     protected static class PersistentClientSessionData {
 
         @JsonProperty("authMethod")
@@ -302,10 +287,6 @@ public class PersistentAuthenticatedClientSessionAdapter implements Authenticate
         private Set<String> protocolMappers;
         @JsonProperty("roles")
         private Set<String> roles;
-        @JsonProperty("currentRefreshToken")
-        private String currentRefreshToken;
-        @JsonProperty("currentRefreshTokenUseCount")
-        private int currentRefreshTokenUseCount;
 
         public String getAuthMethod() {
             return authMethod;
@@ -379,20 +360,5 @@ public class PersistentAuthenticatedClientSessionAdapter implements Authenticate
             this.roles = roles;
         }
 
-        public String getCurrentRefreshToken() {
-            return currentRefreshToken;
-        }
-
-        public void setCurrentRefreshToken(String currentRefreshToken) {
-            this.currentRefreshToken = currentRefreshToken;
-        }
-
-        public int getCurrentRefreshTokenUseCount() {
-            return currentRefreshTokenUseCount;
-        }
-
-        public void setCurrentRefreshTokenUseCount(int currentRefreshTokenUseCount) {
-            this.currentRefreshTokenUseCount = currentRefreshTokenUseCount;
-        }
     }
 }

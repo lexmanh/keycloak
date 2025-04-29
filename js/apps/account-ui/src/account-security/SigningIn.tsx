@@ -15,9 +15,14 @@ import {
   SplitItem,
   Title,
 } from "@patternfly/react-core";
-import { EllipsisVIcon } from "@patternfly/react-icons";
-import { CSSProperties, useState } from "react";
+import {
+  EllipsisVIcon,
+  ExclamationTriangleIcon,
+  InfoAltIcon,
+} from "@patternfly/react-icons";
+import { CSSProperties, Fragment, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
+import { useEnvironment } from "@keycloak/keycloak-ui-shared";
 import { getCredentials } from "../api/methods";
 import {
   CredentialContainer,
@@ -26,7 +31,6 @@ import {
 import { EmptyRow } from "../components/datalist/EmptyRow";
 import { Page } from "../components/page/Page";
 import { TFuncKey } from "../i18n";
-import { useEnvironment } from "../root/KeycloakContext";
 import { formatDate } from "../utils/formatDate";
 import { usePromise } from "../utils/usePromise";
 
@@ -101,7 +105,7 @@ export const SigningIn = () => {
         className="pf-v5-u-max-width"
         style={maxWidth}
       >
-        {credential.userLabel || t(credential.type as TFuncKey)}
+        {t(credential.userLabel) || t(credential.type as TFuncKey)}
       </DataListCell>,
     ];
 
@@ -115,6 +119,57 @@ export const SigningIn = () => {
             <strong className="pf-v5-u-mr-md"></strong>
             {{ date: formatDate(new Date(credential.createdDate)) }}
           </Trans>
+        </DataListCell>,
+      );
+    }
+    if (
+      credMetadata.infoMessage ||
+      (credMetadata.warningMessageTitle &&
+        credMetadata.warningMessageDescription)
+    ) {
+      items.push(
+        <DataListCell
+          key={"warning-message" + credential.id}
+          data-testrole="warning-message"
+        >
+          <>
+            {credMetadata.infoMessage && (
+              <p>
+                <InfoAltIcon />{" "}
+                {t(
+                  credMetadata.infoMessage.key,
+                  credMetadata.infoMessage.parameters?.reduce(
+                    (acc, val, idx) => ({ ...acc, [idx]: val }),
+                    {},
+                  ),
+                )}
+              </p>
+            )}
+            {credMetadata.warningMessageTitle &&
+              credMetadata.warningMessageDescription && (
+                <>
+                  <p>
+                    <ExclamationTriangleIcon />{" "}
+                    {t(
+                      credMetadata.warningMessageTitle.key,
+                      credMetadata.warningMessageTitle.parameters?.reduce(
+                        (acc, val, idx) => ({ ...acc, [idx]: val }),
+                        {},
+                      ),
+                    )}
+                  </p>
+                  <p>
+                    {t(
+                      credMetadata.warningMessageDescription.key,
+                      credMetadata.warningMessageDescription.parameters?.reduce(
+                        (acc, val, idx) => ({ ...acc, [idx]: val }),
+                        {},
+                      ),
+                    )}
+                  </p>
+                </>
+              )}
+          </>
         </DataListCell>,
       );
     }
@@ -139,7 +194,7 @@ export const SigningIn = () => {
           {credentials
             .filter((cred) => cred.category == category)
             .map((container) => (
-              <>
+              <Fragment key={container.category}>
                 <Split className="pf-v5-u-mt-lg pf-v5-u-mb-lg">
                   <SplitItem>
                     <Title
@@ -207,7 +262,7 @@ export const SigningIn = () => {
                               aria-label={t("updateCredAriaLabel")}
                               aria-labelledby={`cred-${meta.credential.id}`}
                             >
-                              {container.removeable ? (
+                              {container.removeable && (
                                 <Button
                                   variant="danger"
                                   data-testrole="remove"
@@ -221,12 +276,12 @@ export const SigningIn = () => {
                                 >
                                   {t("delete")}
                                 </Button>
-                              ) : (
+                              )}
+                              {container.updateAction && (
                                 <Button
                                   variant="secondary"
                                   onClick={() => {
-                                    if (container.updateAction)
-                                      login({ action: container.updateAction });
+                                    login({ action: container.updateAction });
                                   }}
                                   data-testrole="update"
                                 >
@@ -240,7 +295,7 @@ export const SigningIn = () => {
                     </DataListItem>
                   ))}
                 </DataList>
-              </>
+              </Fragment>
             ))}
         </PageSection>
       ))}

@@ -2,23 +2,22 @@ import {
   AlertVariant,
   Button,
   ButtonVariant,
+  Dropdown,
+  DropdownItem,
+  DropdownList,
+  MenuToggle,
   PageSection,
   ToolbarItem,
 } from "@patternfly/react-core";
-import {
-  Dropdown,
-  DropdownItem,
-  KebabToggle,
-} from "@patternfly/react-core/deprecated";
+import { EllipsisVIcon } from "@patternfly/react-icons";
 import { cellWidth } from "@patternfly/react-table";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-
-import { adminClient } from "../admin-client";
+import { useAdminClient } from "../admin-client";
 import type { Row } from "../clients/scopes/ClientScopes";
 import { getProtocolName } from "../clients/utils";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import {
   AllClientScopeType,
   AllClientScopes,
@@ -29,10 +28,7 @@ import {
   removeScope,
 } from "../components/client-scope/ClientScopeTypes";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
-import {
-  Action,
-  KeycloakDataTable,
-} from "../components/table-toolbar/KeycloakDataTable";
+import { Action, KeycloakDataTable } from "@keycloak/keycloak-ui-shared";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useRealm } from "../context/realm-context/RealmContext";
 import helpUrls from "../help-urls";
@@ -56,6 +52,8 @@ type TypeSelectorProps = ClientScopeDefaultOptionalType & {
 };
 
 const TypeSelector = (scope: TypeSelectorProps) => {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
 
@@ -66,7 +64,7 @@ const TypeSelector = (scope: TypeSelectorProps) => {
       all
       onSelect={async (value) => {
         try {
-          await changeScope(scope, value as AllClientScopeType);
+          await changeScope(adminClient, scope, value as AllClientScopeType);
           addAlert(t("clientScopeSuccess"), AlertVariant.success);
           scope.refresh();
         } catch (error) {
@@ -90,6 +88,8 @@ const ClientScopeDetailLink = ({
 };
 
 export default function ClientScopesSection() {
+  const { adminClient } = useAdminClient();
+
   const { realm } = useRealm();
   const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
@@ -165,7 +165,7 @@ export default function ClientScopesSection() {
         try {
           for (const scope of selectedScopes) {
             try {
-              await removeScope(scope);
+              await removeScope(adminClient, scope);
             } catch (error: any) {
               console.warn(
                 "could not remove scope",
@@ -180,7 +180,7 @@ export default function ClientScopesSection() {
           addError("deleteErrorClientScope", error);
         }
       } else {
-        addError(t("notAllowedToDeleteAllClientScopes"), "error");
+        addAlert(t("notAllowedToDeleteAllClientScopes"), AlertVariant.danger);
       }
     },
   });
@@ -253,17 +253,24 @@ export default function ClientScopesSection() {
               </ToolbarItem>
               <ToolbarItem>
                 <Dropdown
-                  toggle={
-                    <KebabToggle
-                      onToggle={(_event, val) => setKebabOpen(val)}
-                    />
-                  }
+                  shouldFocusToggleOnSelect
+                  onOpenChange={(isOpen) => setKebabOpen(isOpen)}
+                  toggle={(ref) => (
+                    <MenuToggle
+                      data-testid="kebab"
+                      aria-label="Kebab toggle"
+                      ref={ref}
+                      onClick={() => setKebabOpen(!kebabOpen)}
+                      variant="plain"
+                    >
+                      <EllipsisVIcon />
+                    </MenuToggle>
+                  )}
                   isOpen={kebabOpen}
-                  isPlain
-                  dropdownItems={[
+                >
+                  <DropdownList>
                     <DropdownItem
-                      key="action"
-                      component="button"
+                      data-testid="delete"
                       isDisabled={selectedScopes.length === 0}
                       onClick={() => {
                         toggleDeleteDialog();
@@ -271,9 +278,9 @@ export default function ClientScopesSection() {
                       }}
                     >
                       {t("delete")}
-                    </DropdownItem>,
-                  ]}
-                />
+                    </DropdownItem>
+                  </DropdownList>
+                </Dropdown>
               </ToolbarItem>
             </>
           }

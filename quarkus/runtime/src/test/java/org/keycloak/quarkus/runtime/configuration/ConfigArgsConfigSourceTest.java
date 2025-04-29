@@ -33,5 +33,24 @@ public class ConfigArgsConfigSourceTest {
         ConfigArgsConfigSource.parseConfigArgs(Arrays.asList("--key=value", "-cf", "file", "command", "arg", "--db", "value"), (key, value) -> values.add(key+'='+value), values::add);
         assertEquals(Arrays.asList("--key=value", "-cf=file", "command", "arg", "--db=value"), values);
     }
+    
+    @Test
+    public void testParseArgsWithSpi() {
+        List<String> values = new ArrayList<>();
+        ConfigArgsConfigSource.parseConfigArgs(Arrays.asList("--spi-some-thing-enabled=value", "--spi-some-thing-else", "other-value"), (key, value) -> values.add(key+'='+value), ignored -> {});
+        assertEquals(Arrays.asList("--spi-some-thing-enabled=value", "--spi-some-thing-else=other-value"), values);
+    }
+    
+    @Test
+    public void testArgEndingInSemiColon() {
+        ConfigArgsConfigSource.setCliArgs("--some=thing;", "--else=value");
+        assertEquals(Arrays.asList("--some=thing;", "--else=value"), ConfigArgsConfigSource.getAllCliArgs());
+    }
+    
+    @Test
+    public void testArgCommas() {
+        ConfigArgsConfigSource.setCliArgs("--some=,,,", "--else=,");
+        assertEquals(Arrays.asList("--some=,,,", "--else=,"), ConfigArgsConfigSource.getAllCliArgs());
+    }
 
 }

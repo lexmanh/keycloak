@@ -1,12 +1,11 @@
 import AuthenticationFlowRepresentation from "@keycloak/keycloak-admin-client/lib/defs/authenticationFlowRepresentation";
+import { SelectControl, useFetch } from "@keycloak/keycloak-ui-shared";
 import { ActionGroup, Button } from "@patternfly/react-core";
 import { sortBy } from "lodash-es";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { SelectControl } from "@keycloak/keycloak-ui-shared";
-import { adminClient } from "../../admin-client";
+import { useAdminClient } from "../../admin-client";
 import { FormAccess } from "../../components/form/FormAccess";
-import { useFetch } from "../../utils/useFetch";
 
 type AuthenticationOverridesProps = {
   save: () => void;
@@ -21,6 +20,8 @@ export const AuthenticationOverrides = ({
   reset,
   hasConfigureAccess,
 }: AuthenticationOverridesProps) => {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const [flows, setFlows] = useState<AuthenticationFlowRepresentation[]>([]);
 

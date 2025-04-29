@@ -19,7 +19,6 @@ package org.keycloak.models.sessions.infinispan.changes;
 
 import org.infinispan.Cache;
 import org.jboss.logging.Logger;
-import org.keycloak.common.Profile;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
@@ -32,12 +31,13 @@ import org.keycloak.models.sessions.infinispan.UserSessionAdapter;
 import org.keycloak.models.sessions.infinispan.entities.AuthenticatedClientSessionEntity;
 import org.keycloak.models.sessions.infinispan.entities.AuthenticatedClientSessionStore;
 import org.keycloak.models.sessions.infinispan.entities.UserSessionEntity;
-import org.keycloak.models.sessions.infinispan.remotestore.RemoteCacheInvoker;
 import org.keycloak.models.sessions.infinispan.util.SessionTimeouts;
 
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static org.keycloak.connections.infinispan.InfinispanConnectionProvider.CLIENT_SESSION_CACHE_NAME;
 
 public class ClientSessionPersistentChangelogBasedTransaction extends PersistentSessionsChangelogBasedTransaction<UUID, AuthenticatedClientSessionEntity> {
 
@@ -47,14 +47,15 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
     public ClientSessionPersistentChangelogBasedTransaction(KeycloakSession session,
                                                             Cache<UUID, SessionEntityWrapper<AuthenticatedClientSessionEntity>> cache,
                                                             Cache<UUID, SessionEntityWrapper<AuthenticatedClientSessionEntity>> offlineCache,
-                                                            RemoteCacheInvoker remoteCacheInvoker,
                                                             SessionFunction<AuthenticatedClientSessionEntity> lifespanMsLoader,
                                                             SessionFunction<AuthenticatedClientSessionEntity> maxIdleTimeMsLoader,
                                                             SessionFunction<AuthenticatedClientSessionEntity> offlineLifespanMsLoader,
                                                             SessionFunction<AuthenticatedClientSessionEntity> offlineMaxIdleTimeMsLoader,
                                                             UserSessionPersistentChangelogBasedTransaction userSessionTx,
-                                                            ArrayBlockingQueue<PersistentUpdate> batchingQueue) {
-        super(session, cache, offlineCache, remoteCacheInvoker, lifespanMsLoader, maxIdleTimeMsLoader, offlineLifespanMsLoader, offlineMaxIdleTimeMsLoader, batchingQueue);
+                                                            ArrayBlockingQueue<PersistentUpdate> batchingQueue,
+                                                            SerializeExecutionsByKey<UUID> serializerOnline,
+                                                            SerializeExecutionsByKey<UUID> serializerOffline) {
+        super(session, CLIENT_SESSION_CACHE_NAME, cache, offlineCache, lifespanMsLoader, maxIdleTimeMsLoader, offlineLifespanMsLoader, offlineMaxIdleTimeMsLoader, batchingQueue, serializerOnline, serializerOffline);
         this.userSessionTx = userSessionTx;
     }
 
@@ -62,9 +63,11 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
         SessionUpdatesList<AuthenticatedClientSessionEntity> myUpdates = getUpdates(offline).get(key);
         if (myUpdates == null) {
             SessionEntityWrapper<AuthenticatedClientSessionEntity> wrappedEntity = null;
-            if (!Profile.isFeatureEnabled(Profile.Feature.PERSISTENT_USER_SESSIONS_NO_CACHE)) {
-                wrappedEntity = getCache(offline).get(key);
+            Cache<UUID, SessionEntityWrapper<AuthenticatedClientSessionEntity>> cache = getCache(offline);
+            if (cache != null) {
+                wrappedEntity = cache.get(key);
             }
+
             if (wrappedEntity == null) {
                 LOG.debugf("client-session not found in cache for sessionId=%s, offline=%s, loading from persister", key, offline);
                 wrappedEntity = getSessionEntityFromPersister(realm, client, userSession, offline);
@@ -91,12 +94,11 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
 
             return wrappedEntity;
         } else {
-            AuthenticatedClientSessionEntity entity = myUpdates.getEntityWrapper().getEntity();
 
             // If entity is scheduled for remove, we don't return it.
             boolean scheduledForRemove = myUpdates.getUpdateTasks().stream().filter((SessionUpdateTask task) -> {
 
-                return task.getOperation(entity) == SessionUpdateTask.CacheOperation.REMOVE;
+                return task.getOperation() == SessionUpdateTask.CacheOperation.REMOVE;
 
             }).findFirst().isPresent();
 
@@ -147,8 +149,12 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
 
         entity.setUserSessionId(userSession.getId());
 
-        // Update timestamp to same value as userSession. LastSessionRefresh of userSession from DB will have correct value
-        entity.setTimestamp(userSession.getLastSessionRefresh());
+        if (offline) {
+            // Update timestamp to the same value as userSession. LastSessionRefresh of userSession from DB will have a correct value.
+            // This is an optimization with the old code before persistent user sessions existed, and is probably valid as an offline user session is supposed to have only one client session.
+            // Remove this code once this once the persistent sessions is the only way to handle sessions, and the old client sessions have been migrated to have an updated timestamp.
+            entity.setTimestamp(userSession.getLastSessionRefresh());
+        }
 
         if (getMaxIdleMsLoader(offline).apply(realm, client, entity) == SessionTimeouts.ENTRY_EXPIRED_FLAG
                 || getLifespanMsLoader(offline).apply(realm, client, entity) == SessionTimeouts.ENTRY_EXPIRED_FLAG) {
@@ -193,13 +199,8 @@ public class ClientSessionPersistentChangelogBasedTransaction extends Persistent
         }
 
         @Override
-        public CacheOperation getOperation(UserSessionEntity session) {
+        public CacheOperation getOperation() {
             return CacheOperation.REPLACE;
-        }
-
-        @Override
-        public CrossDCMessageStatus getCrossDCMessageStatus(SessionEntityWrapper<UserSessionEntity> sessionWrapper) {
-            return CrossDCMessageStatus.SYNC;
         }
 
         @Override

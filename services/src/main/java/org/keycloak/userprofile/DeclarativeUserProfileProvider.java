@@ -36,12 +36,11 @@ import java.util.stream.Collectors;
 
 import org.keycloak.component.ComponentModel;
 import org.keycloak.models.ClientModel;
+import org.keycloak.models.ClientScopeModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
-import org.keycloak.models.UserProvider;
-import org.keycloak.protocol.oidc.OIDCLoginProtocol;
-import org.keycloak.sessions.AuthenticationSessionModel;
+import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.userprofile.config.DeclarativeUserProfileModel;
 import org.keycloak.representations.userprofile.config.UPAttribute;
 import org.keycloak.representations.userprofile.config.UPAttributePermissions;
@@ -72,23 +71,24 @@ public class DeclarativeUserProfileProvider implements UserProfileProvider {
 
     /**
      * Method used for predicate which returns true if any of the configuredScopes is requested in current auth flow.
-     * 
+     *
      * @param context to get current auth flow from
      * @param configuredScopes to be evaluated
      * @return
      */
     private static boolean requestedScopePredicate(AttributeContext context, Set<String> configuredScopes) {
-        KeycloakSession session = context.getSession();
-        AuthenticationSessionModel authenticationSession = session.getContext().getAuthenticationSession();
-
-        if (authenticationSession == null) {
-            return false;
+        // any attribute is enabled and available when managing through the User Admin API
+        if (UserProfileContext.USER_API.equals(context.getContext())) {
+            return true;
         }
 
-        String requestedScopesString = authenticationSession.getClientNote(OIDCLoginProtocol.SCOPE_PARAM);
-        ClientModel client = authenticationSession.getClient();
+        KeycloakSession session = context.getSession();
+        String requestedScopes = AuthenticationManager.getRequestedScopes(session);
+        ClientModel client = session.getContext().getClient();
 
-        return getRequestedClientScopes(requestedScopesString, client).map((csm) -> csm.getName()).anyMatch(configuredScopes::contains);
+        return getRequestedClientScopes(session, requestedScopes, client, context.getUser())
+                .map(ClientScopeModel::getName)
+                .anyMatch(configuredScopes::contains);
     }
 
     private final KeycloakSession session;
@@ -107,7 +107,7 @@ public class DeclarativeUserProfileProvider implements UserProfileProvider {
             UserModel user, UserProfileMetadata metadata) {
 
         if (isServiceAccountUser(user)) {
-            return new LegacyAttributes(context, attributes, user, metadata, session);
+            return new ServiceAccountAttributes(context, attributes, user, metadata, session);
         }
         return new DefaultAttributes(context, attributes, user, metadata, session);
     }
@@ -190,7 +190,7 @@ public class DeclarativeUserProfileProvider implements UserProfileProvider {
             component.setNote(PARSED_CONFIG_COMPONENT_KEY, metadataMap);
         }
 
-        return metadataMap.computeIfAbsent(context, createUserDefinedProfileDecorator(session, decoratedMetadata, component));
+        return metadataMap.computeIfAbsent(context, createUserDefinedProfileDecorator(session, decoratedMetadata, component)).clone();
     }
 
     @Override
@@ -249,13 +249,13 @@ public class DeclarativeUserProfileProvider implements UserProfileProvider {
     protected UserProfileMetadata decorateUserProfileForCache(UserProfileMetadata decoratedMetadata, UPConfig parsedConfig) {
         UserProfileContext context = decoratedMetadata.getContext();
 
-        if (parsedConfig == null) {
+        if (parsedConfig == null || parsedConfig.getAttributes() == null) {
             return decoratedMetadata;
         }
 
         Map<String, UPGroup> groupsByName = asHashMap(parsedConfig.getGroups());
         int guiOrder = 0;
-        
+
         for (UPAttribute attrConfig : parsedConfig.getAttributes()) {
             String attributeName = attrConfig.getName();
 
@@ -414,7 +414,7 @@ public class DeclarativeUserProfileProvider implements UserProfileProvider {
     private Map<String, UPGroup> asHashMap(List<UPGroup> groups) {
         return groups.stream().collect(Collectors.toMap(g -> g.getName(), g -> g));
     }
-    
+
     private AttributeGroupMetadata toAttributeGroupMeta(UPGroup group) {
         if (group == null) {
             return null;

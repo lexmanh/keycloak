@@ -92,9 +92,9 @@ const Fields = ({ readOnly }: DiscoverySettingsProps) => {
             />
           ) : (
             <>
-              <TextControl
+              <TextAreaControl
                 name="config.publicKeySignatureVerifier"
-                label="validatingPublicKey"
+                label={t("validatingPublicKey")}
               />
               <TextControl
                 name="config.publicKeySignatureVerifierKeyId"
@@ -121,7 +121,7 @@ const Fields = ({ readOnly }: DiscoverySettingsProps) => {
           }}
           options={PKCE_METHODS.map((option) => ({
             key: option,
-            value: t(`${option}`),
+            value: t(option),
           }))}
         />
       )}

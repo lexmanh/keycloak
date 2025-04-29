@@ -1,6 +1,13 @@
 import type ClientPolicyRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientPolicyRepresentation";
 import type ClientProfileRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientProfileRepresentation";
 import {
+  HelpItem,
+  KeycloakTextArea,
+  TextControl,
+  useAlerts,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
+import {
   ActionGroup,
   AlertVariant,
   Button,
@@ -11,6 +18,7 @@ import {
   DataListItemCells,
   DataListItemRow,
   Divider,
+  DropdownItem,
   Flex,
   FlexItem,
   FormGroup,
@@ -19,27 +27,18 @@ import {
   Text,
   TextVariants,
 } from "@patternfly/react-core";
-import { DropdownItem } from "@patternfly/react-core/deprecated";
 import { PlusCircleIcon, TrashIcon } from "@patternfly/react-icons";
 import { useState } from "react";
 import { Controller, FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  HelpItem,
-  KeycloakTextArea,
-  TextControl,
-} from "@keycloak/keycloak-ui-shared";
-
-import { adminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAdminClient } from "../admin-client";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
 import { FormAccess } from "../components/form/FormAccess";
-import { KeycloakSpinner } from "../components/keycloak-spinner/KeycloakSpinner";
+import { KeycloakSpinner } from "@keycloak/keycloak-ui-shared";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { useServerInfo } from "../context/server-info/ServerInfoProvider";
-import { useFetch } from "../utils/useFetch";
 import { useParams } from "../utils/useParams";
 import { AddClientProfileModal } from "./AddClientProfileModal";
 import { toNewClientPolicyCondition } from "./routes/AddCondition";
@@ -69,6 +68,8 @@ type PolicyDetailAttributes = {
 };
 
 export default function NewClientPolicy() {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const { realm } = useRealm();
   const { addAlert, addError } = useAlerts();
@@ -236,7 +237,7 @@ export default function NewClientPolicy() {
           }),
         );
       } catch (error) {
-        addError(t("deleteClientPolicyError"), error);
+        addError("deleteClientPolicyError", error);
       }
     },
   });
@@ -261,7 +262,7 @@ export default function NewClientPolicy() {
               toEditClientPolicy({ realm, policyName: formValues.name! }),
             );
           } catch (error) {
-            addError(t("deleteConditionError"), error);
+            addError("deleteConditionError", error);
           }
         } else {
           const updatedPolicies = policies?.filter(
@@ -280,7 +281,7 @@ export default function NewClientPolicy() {
               }),
             );
           } catch (error) {
-            addError(t("deleteClientError"), error);
+            addError("deleteClientError", error);
           }
         }
       },
@@ -305,7 +306,7 @@ export default function NewClientPolicy() {
           form.setValue("profiles", currentPolicy?.profiles || []);
           navigate(toEditClientPolicy({ realm, policyName: formValues.name! }));
         } catch (error) {
-          addError(t("deleteClientPolicyProfileError"), error);
+          addError("deleteClientPolicyProfileError", error);
         }
       } else {
         const updatedPolicies = policies?.filter(
@@ -324,7 +325,7 @@ export default function NewClientPolicy() {
             }),
           );
         } catch (error) {
-          addError(t("deleteClientError"), error);
+          addError("deleteClientError", error);
         }
       }
     },
@@ -475,7 +476,7 @@ export default function NewClientPolicy() {
               name="name"
               label={t("name")}
               rules={{
-                required: { value: true, message: t("required") },
+                required: t("required"),
                 validate: (value) =>
                   policies.some((policy) => policy.name === value)
                     ? t("createClientProfileNameHelperText").toString()
@@ -631,6 +632,7 @@ export default function NewClientPolicy() {
                   <>
                     <Divider />
                     <Text
+                      data-testid="no-conditions"
                       className="kc-emptyConditions"
                       component={TextVariants.h2}
                     >

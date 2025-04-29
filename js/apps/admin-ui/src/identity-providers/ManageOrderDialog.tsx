@@ -1,5 +1,10 @@
 import type IdentityProviderRepresentation from "@keycloak/keycloak-admin-client/lib/defs/identityProviderRepresentation";
 import {
+  KeycloakSpinner,
+  useAlerts,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
+import {
   Button,
   ButtonVariant,
   DataList,
@@ -21,16 +26,21 @@ import {
 import { sortBy } from "lodash-es";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { adminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
-import { KeycloakSpinner } from "../components/keycloak-spinner/KeycloakSpinner";
-import { useFetch } from "../utils/useFetch";
+import { useAdminClient } from "../admin-client";
 
 type ManageOrderDialogProps = {
+  orgId?: string;
+  hideRealmBasedIdps?: boolean;
   onClose: () => void;
 };
 
-export const ManageOrderDialog = ({ onClose }: ManageOrderDialogProps) => {
+export const ManageOrderDialog = ({
+  orgId,
+  hideRealmBasedIdps = false,
+  onClose,
+}: ManageOrderDialogProps) => {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
 
@@ -66,7 +76,10 @@ export const ManageOrderDialog = ({ onClose }: ManageOrderDialogProps) => {
   };
 
   useFetch(
-    () => adminClient.identityProviders.find(),
+    () =>
+      orgId
+        ? adminClient.organizations.listIdentityProviders({ orgId })
+        : adminClient.identityProviders.find({ realmOnly: hideRealmBasedIdps }),
     (providers) => {
       setProviders(providers);
       setOrder(

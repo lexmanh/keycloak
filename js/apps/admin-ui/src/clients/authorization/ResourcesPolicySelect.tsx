@@ -1,15 +1,23 @@
+import PolicyProviderRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyProviderRepresentation";
 import type PolicyRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyRepresentation";
 import type ResourceRepresentation from "@keycloak/keycloak-admin-client/lib/defs/resourceRepresentation";
 import type {
   Clients,
   PolicyQuery,
 } from "@keycloak/keycloak-admin-client/lib/resources/clients";
-import { Button, ButtonVariant, Chip, ChipGroup } from "@patternfly/react-core";
 import {
-  Select,
-  SelectOption,
+  KeycloakSelect,
   SelectVariant,
-} from "@patternfly/react-core/deprecated";
+  useFetch,
+  Variant,
+} from "@keycloak/keycloak-ui-shared";
+import {
+  Button,
+  ButtonVariant,
+  Chip,
+  ChipGroup,
+  SelectOption,
+} from "@patternfly/react-core";
 import { useState } from "react";
 import {
   Controller,
@@ -17,18 +25,16 @@ import {
   useFormContext,
 } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-
 import { Link, useNavigate } from "react-router-dom";
-import { adminClient } from "../../admin-client";
-import { useRealm } from "../../context/realm-context/RealmContext";
-import { useFetch } from "../../utils/useFetch";
-import { toPolicyDetails } from "../routes/PolicyDetails";
+import { useAdminClient } from "../../admin-client";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
-import { toCreatePolicy } from "../routes/NewPolicy";
-import { NewPolicyDialog } from "./NewPolicyDialog";
+import { useRealm } from "../../context/realm-context/RealmContext";
 import useToggle from "../../utils/useToggle";
-import PolicyProviderRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyProviderRepresentation";
+import { toCreatePolicy } from "../routes/NewPolicy";
+import { toPolicyDetails } from "../routes/PolicyDetails";
 import { toResourceDetails } from "../routes/Resource";
+import { NewPolicyDialog } from "./NewPolicyDialog";
+import { useIsAdminPermissionsClient } from "../../utils/useIsAdminPermissionsClient";
 
 type Type = "resources" | "policies";
 
@@ -36,7 +42,7 @@ type ResourcesPolicySelectProps = {
   name: Type;
   clientId: string;
   permissionId?: string;
-  variant?: SelectVariant;
+  variant?: Variant;
   preSelected?: string;
   isRequired?: boolean;
 };
@@ -76,6 +82,8 @@ export const ResourcesPolicySelect = ({
   preSelected,
   isRequired = false,
 }: ResourcesPolicySelectProps) => {
+  const { adminClient } = useAdminClient();
+
   const { realm } = useRealm();
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -92,6 +100,7 @@ export const ResourcesPolicySelect = ({
     useState<PolicyProviderRepresentation[]>();
   const [onUnsavedChangesConfirm, setOnUnsavedChangesConfirm] =
     useState<() => void>();
+  const isAdminPermissionsClient = useIsAdminPermissionsClient(clientId);
 
   const functions = typeMapping[name];
 
@@ -116,6 +125,12 @@ export const ResourcesPolicySelect = ({
           ? adminClient.clients[functions.fetchFunction]({
               id: clientId,
               permissionId,
+            })
+          : Promise.resolve([]),
+        preSelected && name === "resources"
+          ? adminClient.clients.getResource({
+              id: clientId,
+              resourceId: preSelected,
             })
           : Promise.resolve([]),
       ]);
@@ -229,11 +244,11 @@ export const ResourcesPolicySelect = ({
         control={control}
         rules={{ validate: (value) => !isRequired || value!.length > 0 }}
         render={({ field }) => (
-          <Select
+          <KeycloakSelect
             toggleId={name}
             variant={variant}
-            onToggle={(_event, val) => setOpen(val)}
-            onFilter={(_, filter) => {
+            onToggle={(val) => setOpen(val)}
+            onFilter={(filter) => {
               setSearch(filter);
               return toSelectOptions();
             }}
@@ -241,8 +256,12 @@ export const ResourcesPolicySelect = ({
               field.onChange([]);
               setSearch("");
             }}
-            selections={field.value}
-            onSelect={(_, selectedValue) => {
+            selections={
+              variant === SelectVariant.typeaheadMulti
+                ? field.value
+                : items.find((i) => i.id === field.value?.[0])?.name
+            }
+            onSelect={(selectedValue) => {
               const option = selectedValue.toString();
               if (variant === SelectVariant.typeaheadMulti) {
                 const changedValue = field.value?.find(
@@ -259,12 +278,11 @@ export const ResourcesPolicySelect = ({
             }}
             isOpen={open}
             aria-label={t(name)}
-            isDisabled={!!preSelected}
             validated={errors[name] ? "error" : "default"}
             typeAheadAriaLabel={t(name)}
             chipGroupComponent={toChipGroupItems(field)}
             footer={
-              name === "policies" ? (
+              name === "policies" && !isAdminPermissionsClient ? (
                 <Button
                   variant="link"
                   isInline
@@ -286,7 +304,7 @@ export const ResourcesPolicySelect = ({
             }
           >
             {toSelectOptions()}
-          </Select>
+          </KeycloakSelect>
         )}
       />
     </>

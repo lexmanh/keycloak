@@ -86,7 +86,11 @@ public class Encode
             case '@':
                continue;
          }
-         pathEncoding[i] = URLEncoder.encode(String.valueOf((char) i));
+         try {
+            pathEncoding[i] = URLEncoder.encode(String.valueOf((char) i), UTF_8);
+         } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+         }
       }
       pathEncoding[' '] = "%20";
       System.arraycopy(pathEncoding, 0, matrixParameterEncoding, 0, pathEncoding.length);
@@ -119,7 +123,11 @@ public class Encode
                queryNameValueEncoding[i] = "+";
                continue;
          }
-         queryNameValueEncoding[i] = URLEncoder.encode(String.valueOf((char) i));
+         try {
+            queryNameValueEncoding[i] = URLEncoder.encode(String.valueOf((char) i), UTF_8);
+         } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+         }
       }
 
       /*
@@ -157,7 +165,11 @@ public class Encode
                queryStringEncoding[i] = "%20";
                continue;
          }
-         queryStringEncoding[i] = URLEncoder.encode(String.valueOf((char) i));
+         try {
+            queryStringEncoding[i] = URLEncoder.encode(String.valueOf((char) i), UTF_8);
+         } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+         }
       }
 
      /*
@@ -405,7 +417,7 @@ public class Encode
    }
 
    /**
-    * Encode via <a href="http://ietf.org/rfc/rfc3986.txt">RFC 3986</a>.  PCHAR is allowed allong with '/'
+    * Encode via <a href="http://ietf.org/rfc/rfc3986.txt">RFC 3986</a>.  PCHAR is allowed along with '/'
     * <p/>
     * unreserved  = ALPHA / DIGIT / "-" / "." / "_" / "~"
     * sub-delims  = "!" / "$" / "&" / "'" / "(" / ")"
@@ -431,7 +443,7 @@ public class Encode
    }
 
    /**
-    * Encode via <a href="http://ietf.org/rfc/rfc3986.txt">RFC 3986</a>.  PCHAR is allowed allong with '/'
+    * Encode via <a href="http://ietf.org/rfc/rfc3986.txt">RFC 3986</a>.  PCHAR is allowed along with '/'
     * <p/>
     * unreserved  = ALPHA / DIGIT / "-" / "." / "_" / "~"
     * sub-delims  = "!" / "$" / "&" / "'" / "(" / ")"

@@ -19,9 +19,10 @@ package org.keycloak.protocol.oid4vc.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.collect.ImmutableList;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Represents a CredentialsOffer according to the OID4VCI Spec
@@ -56,7 +57,7 @@ public class CredentialsOffer {
     }
 
     public CredentialsOffer setCredentialConfigurationIds(List<String> credentialConfigurationIds) {
-        this.credentialConfigurationIds = ImmutableList.copyOf(credentialConfigurationIds);
+        this.credentialConfigurationIds = Collections.unmodifiableList(credentialConfigurationIds);
         return this;
     }
 
@@ -67,5 +68,17 @@ public class CredentialsOffer {
     public CredentialsOffer setGrants(PreAuthorizedGrant grants) {
         this.grants = grants;
         return this;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof CredentialsOffer that)) return false;
+        return Objects.equals(getCredentialIssuer(), that.getCredentialIssuer()) && Objects.equals(getCredentialConfigurationIds(), that.getCredentialConfigurationIds()) && Objects.equals(getGrants(), that.getGrants());
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getCredentialIssuer(), getCredentialConfigurationIds(), getGrants());
     }
 }

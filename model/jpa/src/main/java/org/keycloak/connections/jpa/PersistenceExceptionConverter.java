@@ -32,6 +32,7 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -89,8 +90,9 @@ public class PersistenceExceptionConverter implements InvocationHandler {
 
         Predicate<Throwable> throwModelDuplicateEx = throwable ->
                 throwable instanceof EntityExistsException
-                        || throwable instanceof ConstraintViolationException
-                        || throwable instanceof SQLIntegrityConstraintViolationException;
+                || throwable instanceof ConstraintViolationException
+                || isSqlStateClass23(throwable)
+                || throwable instanceof SQLIntegrityConstraintViolationException;
 
         throwModelDuplicateEx = throwModelDuplicateEx.or(checkDuplicationMessage);
 
@@ -103,6 +105,17 @@ public class PersistenceExceptionConverter implements InvocationHandler {
         } else {
             throw new ModelException("Database operation failed", t);
         }
+    }
+
+    /**
+     * SQL state class 23 captures errors like 23505 = UNIQUE VIOLATION et al.
+     * This captures, for example, a BatchUpdateException which is not mapped to the other exception types
+     * https://en.wikipedia.org/wiki/SQLSTATE
+     */
+    private static boolean isSqlStateClass23(Throwable t) {
+        return t instanceof SQLException bue
+            && bue.getSQLState() != null
+            && bue.getSQLState().startsWith("23");
     }
 
 }

@@ -10,8 +10,8 @@ import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { NumberControl } from "@keycloak/keycloak-ui-shared";
-import { adminClient } from "../../admin-client";
-import { useAlerts } from "../../components/alert/Alerts";
+import { useAdminClient } from "../../admin-client";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import { FormAccess } from "../../components/form/FormAccess";
 import { TimeSelectorControl } from "../../components/time-selector/TimeSelectorControl";
 import { ViewHeader } from "../../components/view-header/ViewHeader";
@@ -20,6 +20,8 @@ import { toClients } from "../routes/Clients";
 import { AccessTokenDialog } from "./AccessTokenDialog";
 
 export default function CreateInitialAccessToken() {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const form = useForm({ mode: "onChange" });
   const {
@@ -83,9 +85,11 @@ export default function CreateInitialAccessToken() {
             label={t("count")}
             labelIcon={t("countHelp")}
             controller={{
+              rules: {
+                min: 1,
+              },
               defaultValue: 1,
             }}
-            min={1}
           />
           <ActionGroup>
             <Button

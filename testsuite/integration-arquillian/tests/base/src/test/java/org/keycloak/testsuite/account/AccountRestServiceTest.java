@@ -17,6 +17,9 @@
 package org.keycloak.testsuite.account;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MediaType;
+import org.apache.http.Header;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.hamcrest.Matchers;
 import org.junit.Assert;
@@ -28,6 +31,7 @@ import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.UserResource;
 import org.keycloak.authentication.authenticators.browser.WebAuthnAuthenticatorFactory;
 import org.keycloak.authentication.authenticators.browser.WebAuthnPasswordlessAuthenticatorFactory;
+import org.keycloak.authentication.requiredactions.DeleteCredentialAction;
 import org.keycloak.authentication.requiredactions.WebAuthnPasswordlessRegisterFactory;
 import org.keycloak.authentication.requiredactions.WebAuthnRegisterFactory;
 import org.keycloak.broker.provider.util.SimpleHttp;
@@ -62,6 +66,7 @@ import org.keycloak.representations.idm.ProtocolMapperRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.RequiredActionProviderRepresentation;
 import org.keycloak.representations.idm.RequiredActionProviderSimpleRepresentation;
+import org.keycloak.services.cors.Cors;
 import org.keycloak.services.messages.Messages;
 import org.keycloak.services.resources.account.AccountCredentialResource;
 import org.keycloak.services.util.ResolveRelative;
@@ -70,10 +75,10 @@ import org.keycloak.testsuite.admin.ApiUtil;
 import org.keycloak.testsuite.admin.authentication.AbstractAuthenticationTest;
 import org.keycloak.testsuite.arquillian.annotation.EnableFeature;
 import org.keycloak.testsuite.broker.util.SimpleHttpDefault;
-import org.keycloak.testsuite.forms.VerifyProfileTest;
-import org.keycloak.testsuite.util.OAuthClient;
+import org.keycloak.testsuite.util.oauth.AccessTokenResponse;
 import org.keycloak.testsuite.util.TokenUtil;
 import org.keycloak.testsuite.util.UserBuilder;
+import org.keycloak.testsuite.util.userprofile.UserProfileUtil;
 import org.keycloak.userprofile.UserProfileContext;
 
 import jakarta.ws.rs.ClientErrorException;
@@ -81,27 +86,30 @@ import jakarta.ws.rs.core.Response;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.containsString;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.keycloak.testsuite.forms.VerifyProfileTest.PERMISSIONS_ALL;
+import static org.keycloak.testsuite.util.userprofile.UserProfileUtil.PERMISSIONS_ALL;
 
 /**
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
  */
 public class AccountRestServiceTest extends AbstractRestServiceTest {
-    
+
     @Rule
     public AssertEvents events = new AssertEvents(this);
 
@@ -221,7 +229,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
         UserRepresentation user = getUser(false);
         assertNull(user.getUserProfileMetadata());
     }
-    
+
     protected static UserProfileAttributeMetadata getUserProfileAttributeMetadata(UserRepresentation user, String attName) {
         if(user.getUserProfileMetadata() == null)
             return null;
@@ -232,7 +240,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
         }
         return null;
     }
-    
+
     protected static UserProfileAttributeMetadata assertUserProfileAttributeMetadata(UserRepresentation user, String attName, String displayName, boolean required, boolean readOnly) {
         UserProfileAttributeMetadata uam = getUserProfileAttributeMetadata(user, attName);
 
@@ -304,7 +312,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
         }
 
     }
-    
+
     /**
      * Reproducer for bugs KEYCLOAK-17424 and KEYCLOAK-17582
      */
@@ -317,13 +325,13 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
 
             realmRep.setRegistrationEmailAsUsername(false);
             adminClient.realm("test").update(realmRep);
-            
+
             //set flag over adminClient to initial value
             UserResource userResource = adminClient.realm("test").users().get(user.getId());
             org.keycloak.representations.idm.UserRepresentation ur = userResource.toRepresentation();
             ur.setEmailVerified(true);
             userResource.update(ur);
-            //make sure flag is correct before the test 
+            //make sure flag is correct before the test
             user = getUser();
             assertEquals(true, user.isEmailVerified());
 
@@ -333,7 +341,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
             assertEquals(originalEmail, user.getEmail());
             assertEquals(true, user.isEmailVerified());
 
-            
+
             // Update email - flag must be reset to false
             user.setEmail("bobby@localhost");
             user = updateAndGet(user);
@@ -396,7 +404,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
                 .detail(Details.UPDATED_LAST_NAME, "Simpsons")
                 .assertEvent();
             events.assertEmpty();
-            
+
         } finally {
             RealmRepresentation realmRep = adminClient.realm("test").toRepresentation();
             realmRep.setEditUsernameAllowed(true);
@@ -411,7 +419,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
             assertEquals(204, response.getStatus());
         }
     }
-        
+
     @Test
     public void testUpdateProfile() throws IOException {
         String userProfileCfg = "{\"attributes\": ["
@@ -449,7 +457,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
             assertEquals("val1", user.getAttributes().get("attr1").get(0));
             assertEquals(1, user.getAttributes().get("attr2").size());
             assertEquals("val2", user.getAttributes().get("attr2").get(0));
-            
+
             // Update attributes
             user.getAttributes().remove("attr1");
             user.getAttributes().get("attr2").add("val3");
@@ -592,6 +600,26 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
         }
     }
 
+    @Test
+    public void testCors() throws IOException {
+        String accountUrl = getAccountUrl(null);
+        SimpleHttp a = SimpleHttpDefault.doGet(accountUrl + "/linked-accounts", httpClient).auth(tokenUtil.getToken())
+                .header("Origin", "http://localtest.me:8180")
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON);
+
+        try (SimpleHttp.Response response = a.asResponse()) {
+            Set<String> expected = new HashSet<>();
+            Header[] actual = response.getAllHeaders();
+
+            for (Header header : actual) {
+                assertTrue(expected.add(header.getName()));
+            }
+
+            assertThat(expected, Matchers.hasItems(Cors.ACCESS_CONTROL_ALLOW_ORIGIN, Cors.ACCESS_CONTROL_ALLOW_CREDENTIALS));
+        }
+
+    }
+
     protected UserRepresentation getUser() throws IOException {
         return getUser(true);
     }
@@ -611,7 +639,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
             throw e;
         }
     }
-    
+
     protected UserRepresentation updateAndGet(UserRepresentation user) throws IOException {
         SimpleHttp a = SimpleHttpDefault.doPost(getAccountUrl(null), httpClient).auth(tokenUtil.getToken()).json(user);
         try {
@@ -860,6 +888,14 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
                 .user(user.toRepresentation().getId())
                 .detail(Details.SELECTED_CREDENTIAL_ID, otpCredential.getId())
                 .detail(Details.CREDENTIAL_USER_LABEL, "totpCredentialUserLabel")
+                .detail(Details.CREDENTIAL_TYPE, OTPCredentialModel.TYPE)
+                .assertEvent();
+        events.expect(EventType.REMOVE_CREDENTIAL)
+                .client("account")
+                .user(user.toRepresentation().getId())
+                .detail(Details.SELECTED_CREDENTIAL_ID, otpCredential.getId())
+                .detail(Details.CREDENTIAL_USER_LABEL, "totpCredentialUserLabel")
+                .detail(Details.CREDENTIAL_TYPE, OTPCredentialModel.TYPE)
                 .assertEvent();
         events.assertEmpty();
     }
@@ -953,8 +989,31 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
             assertEquals(204, response.getStatus());
         }
 
-        // Revert - re-enable requiredAction and remove OTP credential from the user
+        // Revert - re-enable requiredAction
         setRequiredActionEnabledStatus(UserModel.RequiredAction.CONFIGURE_TOTP.name(), true);
+    }
+
+    // Issue 30204
+    @Test
+    public void testCredentialsGetWithDisabledDeleteCredentialAction() throws IOException {
+        // Assert OTP will be returned by default
+        List<AccountCredentialResource.CredentialContainer> credentials = getCredentials();
+        assertExpectedCredentialTypes(credentials, PasswordCredentialModel.TYPE, OTPCredentialModel.TYPE);
+
+        // Assert OTP removeable
+        AccountCredentialResource.CredentialContainer otpCredential = credentials.get(1);
+        assertTrue(otpCredential.isRemoveable());
+
+        // Disable "Delete credential" action
+        setRequiredActionEnabledStatus(DeleteCredentialAction.PROVIDER_ID, false);
+
+        // Assert OTP not removeable
+        credentials = getCredentials();
+        otpCredential = credentials.get(1);
+        assertFalse(otpCredential.isRemoveable());
+
+        // Revert - re-enable requiredAction
+        setRequiredActionEnabledStatus(DeleteCredentialAction.PROVIDER_ID, true);
     }
 
     private void setRequiredActionEnabledStatus(String requiredActionProviderId, boolean enabled) {
@@ -1028,7 +1087,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
     }
 
     private void configureBrowserFlowWithWebAuthnAuthenticator(String newFlowAlias) {
-        HashMap<String, String> params = new HashMap<>();
+        HashMap<String, Object> params = new HashMap<>();
         params.put("newName", newFlowAlias);
         Response response = testRealm().flows().copy("browser", params);
         response.close();
@@ -1081,8 +1140,8 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
 
     @Test
     public void listApplications() throws Exception {
-        oauth.clientId("in-use-client");
-        OAuthClient.AccessTokenResponse tokenResponse = oauth.doGrantAccessTokenRequest("secret1", "view-applications-access", "password");
+        oauth.client("in-use-client", "secret1");
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest("view-applications-access", "password");
         assertNull(tokenResponse.getErrorDescription());
 
         TokenUtil token = new TokenUtil("view-applications-access", "password");
@@ -1104,8 +1163,8 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
 
     @Test
     public void listApplicationsFiltered() throws Exception {
-        oauth.clientId("in-use-client");
-        OAuthClient.AccessTokenResponse tokenResponse = oauth.doGrantAccessTokenRequest("secret1", "view-applications-access", "password");
+        oauth.client("in-use-client", "secret1");
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest("view-applications-access", "password");
         assertNull(tokenResponse.getErrorDescription());
 
         TokenUtil token = new TokenUtil("view-applications-access", "password");
@@ -1127,12 +1186,12 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
     @Test
     public void listApplicationsOfflineAccess() throws Exception {
         oauth.scope(OAuth2Constants.OFFLINE_ACCESS);
-        oauth.clientId("offline-client");
-        OAuthClient.AccessTokenResponse offlineTokenResponse = oauth.doGrantAccessTokenRequest("secret1", "view-applications-access", "password");
+        oauth.client("offline-client", "secret1");
+        AccessTokenResponse offlineTokenResponse = oauth.doPasswordGrantRequest("view-applications-access", "password");
         assertNull(offlineTokenResponse.getErrorDescription());
 
-        oauth.clientId("offline-client-without-base-url");
-        offlineTokenResponse = oauth.doGrantAccessTokenRequest("secret1", "view-applications-access", "password");
+        oauth.client("offline-client-without-base-url", "secret1");
+        offlineTokenResponse = oauth.doPasswordGrantRequest("view-applications-access", "password");
         assertNull(offlineTokenResponse.getErrorDescription());
 
         TokenUtil token = new TokenUtil("view-applications-access", "password");
@@ -1147,8 +1206,8 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
         Map<String, ClientRepresentation> apps = applications.stream().collect(Collectors.toMap(x -> x.getClientId(), x -> x));
         assertThat(apps.keySet(), containsInAnyOrder("offline-client", "offline-client-without-base-url", "always-display-client", "direct-grant"));
 
-        assertClientRep(apps.get("offline-client"), "Offline Client", null, false, true, true, null, offlineClientAppUri);
-        assertClientRep(apps.get("offline-client-without-base-url"), "Offline Client Without Base URL", null, false, true, true, null, null);
+        assertClientRep(apps.get("offline-client"), "Offline Client", null, false, false, true, null, offlineClientAppUri);
+        assertClientRep(apps.get("offline-client-without-base-url"), "Offline Client Without Base URL", null, false, false, true, null, null);
     }
 
     @Test
@@ -1214,7 +1273,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
     @Test
     public void listApplicationsWithRootUrl() throws Exception {
         oauth.clientId("root-url-client");
-        OAuthClient.AccessTokenResponse tokenResponse = oauth.doGrantAccessTokenRequest("password", "view-applications-access", "password");
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest("view-applications-access", "password");
         assertNull(tokenResponse.getErrorDescription());
 
         TokenUtil token = new TokenUtil("view-applications-access", "password");
@@ -1653,8 +1712,8 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
     @Test
     public void revokeOfflineAccess() throws Exception {
         oauth.scope(OAuth2Constants.OFFLINE_ACCESS);
-        oauth.clientId("offline-client");
-        OAuthClient.AccessTokenResponse offlineTokenResponse = oauth.doGrantAccessTokenRequest("secret1", "view-applications-access", "password");
+        oauth.client("offline-client", "secret1");
+        AccessTokenResponse offlineTokenResponse = oauth.doPasswordGrantRequest("view-applications-access", "password");
         assertNull(offlineTokenResponse.getErrorDescription());
 
         tokenUtil = new TokenUtil("view-applications-access", "password");
@@ -1675,9 +1734,9 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
         assertFalse(applications.isEmpty());
 
         Map<String, ClientRepresentation> apps = applications.stream().collect(Collectors.toMap(x -> x.getClientId(), x -> x));
-        assertThat(apps.keySet(), containsInAnyOrder("offline-client", "always-display-client", "direct-grant"));
+        assertThat(apps.keySet(), containsInAnyOrder("always-display-client", "direct-grant"));
 
-        assertClientRep(apps.get("offline-client"), "Offline Client", null, false, true, false, null, offlineClientAppUri);
+        assertNull(apps.get("offline-client"));
     }
 
     @Test
@@ -1701,7 +1760,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
     @Test
     public void testAudience() throws Exception {
         oauth.clientId("custom-audience");
-        OAuthClient.AccessTokenResponse tokenResponse = oauth.doGrantAccessTokenRequest("password", "test-user@localhost", "password");
+        AccessTokenResponse tokenResponse = oauth.doPasswordGrantRequest("test-user@localhost", "password");
         assertNull(tokenResponse.getErrorDescription());
 
         SimpleHttp.Response response = SimpleHttpDefault.doGet(getAccountUrl(null), httpClient)
@@ -1717,7 +1776,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
         mapperRep.getConfig().put("included.custom.audience", "account");
         testRealm().clients().get(clientRep.getId()).getProtocolMappers().update(mapperRep.getId(), mapperRep);
 
-        tokenResponse = oauth.doGrantAccessTokenRequest("password", "test-user@localhost", "password");
+        tokenResponse = oauth.doPasswordGrantRequest("test-user@localhost", "password");
         assertNull(tokenResponse.getErrorDescription());
 
         response = SimpleHttpDefault.doGet(getAccountUrl(null), httpClient)
@@ -1729,7 +1788,7 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
         // remove audience completely
         testRealm().clients().get(clientRep.getId()).getProtocolMappers().delete(mapperRep.getId());
 
-        tokenResponse = oauth.doGrantAccessTokenRequest("password", "test-user@localhost", "password");
+        tokenResponse = oauth.doPasswordGrantRequest("test-user@localhost", "password");
         assertNull(tokenResponse.getErrorDescription());
 
         response = SimpleHttpDefault.doGet(getAccountUrl(null), httpClient)
@@ -1764,6 +1823,19 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
         }
     }
 
+    @Test
+    public void testUpdateProfileUnrecognizedPropertyInRepresentation() throws IOException {
+        final UserRepresentation user = getUser();
+        final Map<String,String> invalidRep = Map.of("id", user.getId(), "username", user.getUsername(), "invalid", "something");
+        SimpleHttp.Response response = SimpleHttpDefault.doPost(getAccountUrl(null), httpClient)
+                .auth(tokenUtil.getToken())
+                .json(invalidRep)
+                .asResponse();
+       assertEquals(400, response.getStatus());
+       final OAuth2ErrorRepresentation error = response.asJson(OAuth2ErrorRepresentation.class);
+       assertThat(error.getError(), containsString("Invalid json representation for UserRepresentation. Unrecognized field \"invalid\" at line"));
+    }
+
     @EnableFeature(Profile.Feature.UPDATE_EMAIL)
     public void testEmailWhenUpdateEmailEnabled() throws Exception {
         reconnectAdminClient();
@@ -1793,6 +1865,6 @@ public class AccountRestServiceTest extends AbstractRestServiceTest {
     }
 
     protected void setUserProfileConfiguration(String configuration) {
-        VerifyProfileTest.setUserProfileConfiguration(testRealm(), configuration);
+        UserProfileUtil.setUserProfileConfiguration(testRealm(), configuration);
     }
 }

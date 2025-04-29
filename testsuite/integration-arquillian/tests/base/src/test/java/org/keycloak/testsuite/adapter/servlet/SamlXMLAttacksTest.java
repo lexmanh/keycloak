@@ -15,8 +15,8 @@ import org.keycloak.testsuite.arquillian.annotation.AppServerContainer;
 import org.keycloak.testsuite.saml.AbstractSamlTest;
 import org.keycloak.testsuite.utils.arquillian.ContainerConstants;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -33,11 +33,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.keycloak.testsuite.util.Matchers.bodyHC;
 import static org.keycloak.testsuite.util.Matchers.statusCodeIsHC;
 
-@AppServerContainer(ContainerConstants.APP_SERVER_UNDERTOW)
 @AppServerContainer(ContainerConstants.APP_SERVER_WILDFLY)
 @AppServerContainer(ContainerConstants.APP_SERVER_EAP)
-@AppServerContainer(ContainerConstants.APP_SERVER_EAP6)
-@AppServerContainer(ContainerConstants.APP_SERVER_EAP71)
 @AppServerContainer(ContainerConstants.APP_SERVER_EAP8)
 public class SamlXMLAttacksTest extends AbstractSamlTest {
 
@@ -69,12 +66,7 @@ public class SamlXMLAttacksTest extends AbstractSamlTest {
                 String encoded = PostBindingUtil.base64Encode(bombDoctype + samlAuthnRequest);
                 parameters.add(new BasicNameValuePair(GeneralConstants.SAML_REQUEST_KEY, encoded));
 
-                UrlEncodedFormEntity formEntity;
-                try {
-                    formEntity = new UrlEncodedFormEntity(parameters, "UTF-8");
-                } catch (UnsupportedEncodingException e) {
-                    throw new RuntimeException(e);
-                }
+                UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(parameters, StandardCharsets.UTF_8);
 
                 post.setEntity(formEntity);
 
@@ -104,13 +96,7 @@ public class SamlXMLAttacksTest extends AbstractSamlTest {
             String encoded = PostBindingUtil.base64Encode(s);
             parameters.add(new BasicNameValuePair(GeneralConstants.SAML_REQUEST_KEY, encoded));
 
-            UrlEncodedFormEntity formEntity;
-            try {
-                formEntity = new UrlEncodedFormEntity(parameters, "UTF-8");
-            } catch (UnsupportedEncodingException e) {
-                throw new RuntimeException(e);
-            }
-
+            UrlEncodedFormEntity formEntity = new UrlEncodedFormEntity(parameters, StandardCharsets.UTF_8);
             post.setEntity(formEntity);
 
             try (CloseableHttpResponse response = client.execute(post)) {

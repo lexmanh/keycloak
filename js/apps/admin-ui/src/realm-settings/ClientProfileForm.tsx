@@ -1,6 +1,13 @@
 import type ClientProfileRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientProfileRepresentation";
 import type ClientProfilesRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientProfilesRepresentation";
 import {
+  HelpItem,
+  TextAreaControl,
+  TextControl,
+  useAlerts,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
+import {
   ActionGroup,
   AlertVariant,
   Button,
@@ -11,6 +18,7 @@ import {
   DataListItemCells,
   DataListItemRow,
   Divider,
+  DropdownItem,
   Flex,
   FlexItem,
   Label,
@@ -18,25 +26,17 @@ import {
   Text,
   TextVariants,
 } from "@patternfly/react-core";
-import { DropdownItem } from "@patternfly/react-core/deprecated";
 import { PlusCircleIcon, TrashIcon } from "@patternfly/react-icons";
 import { Fragment, useMemo, useState } from "react";
 import { FormProvider, useFieldArray, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import {
-  HelpItem,
-  TextAreaControl,
-  TextControl,
-} from "@keycloak/keycloak-ui-shared";
-import { adminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAdminClient } from "../admin-client";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
 import { FormAccess } from "../components/form/FormAccess";
-import { KeycloakSpinner } from "../components/keycloak-spinner/KeycloakSpinner";
+import { KeycloakSpinner } from "@keycloak/keycloak-ui-shared";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useServerInfo } from "../context/server-info/ServerInfoProvider";
-import { useFetch } from "../utils/useFetch";
 import { useParams } from "../utils/useParams";
 import { toAddExecutor } from "./routes/AddExecutor";
 import { toClientPolicies } from "./routes/ClientPolicies";
@@ -54,6 +54,8 @@ const defaultValues: ClientProfileForm = {
 };
 
 export default function ClientProfileForm() {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const navigate = useNavigate();
   const form = useForm<ClientProfileForm>({
@@ -170,7 +172,7 @@ export default function ClientProfileForm() {
           addAlert(t("deleteExecutorSuccess"), AlertVariant.success);
           navigate(toClientProfile({ realm, profileName }));
         } catch (error) {
-          addError(t("deleteExecutorError"), error);
+          addError("deleteExecutorError", error);
         }
       } else {
         try {
@@ -178,7 +180,7 @@ export default function ClientProfileForm() {
           addAlert(t("deleteClientSuccess"), AlertVariant.success);
           navigate(toClientPolicies({ realm, tab: "profiles" }));
         } catch (error) {
-          addError(t("deleteClientError"), error);
+          addError("deleteClientError", error);
         }
       }
     },
@@ -360,13 +362,13 @@ export default function ClientProfileForm() {
                                         />
                                         {!isGlobalProfile && (
                                           <Button
+                                            data-testid={`deleteExecutor-${type.id}`}
                                             variant="link"
                                             isInline
                                             icon={
                                               <TrashIcon
                                                 key={`executorType-trash-icon-${type.id}`}
                                                 className="kc-executor-trash-icon"
-                                                data-testid="deleteExecutor"
                                               />
                                             }
                                             onClick={() => {

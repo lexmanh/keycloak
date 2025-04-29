@@ -1,6 +1,6 @@
 FROM registry.access.redhat.com/ubi9 AS ubi-micro-build
 
-ENV KEYCLOAK_VERSION 999.0.0-SNAPSHOT
+ARG KEYCLOAK_VERSION=999.0.0-SNAPSHOT
 ARG KEYCLOAK_DIST=https://github.com/keycloak/keycloak/releases/download/$KEYCLOAK_VERSION/keycloak-$KEYCLOAK_VERSION.tar.gz
 
 RUN dnf install -y tar gzip
@@ -17,7 +17,7 @@ RUN mv /tmp/keycloak/keycloak-* /opt/keycloak && mkdir -p /opt/keycloak/data
 RUN chmod -R g+rwX /opt/keycloak
 
 ADD ubi-null.sh /tmp/
-RUN bash /tmp/ubi-null.sh java-17-openjdk-headless glibc-langpack-en findutils
+RUN bash /tmp/ubi-null.sh java-21-openjdk-headless glibc-langpack-en findutils
 
 FROM registry.access.redhat.com/ubi9-micro
 ENV LANG en_US.UTF-8

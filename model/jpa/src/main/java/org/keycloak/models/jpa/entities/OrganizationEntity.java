@@ -31,15 +31,18 @@ import jakarta.persistence.NamedQueries;
 import jakarta.persistence.NamedQuery;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import org.keycloak.utils.StringUtil;
 
 @Table(name="ORG")
 @Entity
 @NamedQueries({
-        @NamedQuery(name="getByRealm", query="select o from OrganizationEntity o where o.realmId = :realmId order by o.name ASC"),
-        @NamedQuery(name="getByNameOrDomain", query="select distinct o from OrganizationEntity o inner join OrganizationDomainEntity d ON o.id = d.organization.id" +
-                " where o.realmId = :realmId AND (o.name = :search OR d.name = :search) order by o.name ASC"),
-        @NamedQuery(name="getByNameOrDomainContained", query="select distinct o from OrganizationEntity o inner join OrganizationDomainEntity d ON o.id = d.organization.id" +
-                " where o.realmId = :realmId AND (lower(o.name) like concat('%',:search,'%') OR d.name like concat('%',:search,'%')) order by o.name ASC")
+        @NamedQuery(name="getByOrgName", query="select distinct o from OrganizationEntity o where o.realmId = :realmId AND o.name = :name"),
+        @NamedQuery(name="getByDomainName", query="select distinct o from OrganizationEntity o inner join OrganizationDomainEntity d ON o.id = d.organization.id" +
+                " where o.realmId = :realmId AND d.name = :name"),
+        @NamedQuery(name="getCount", query="select count(o) from OrganizationEntity o where o.realmId = :realmId"),
+        @NamedQuery(name="deleteOrganizationsByRealm", query="delete from OrganizationEntity o where o.realmId = :realmId"),
+        @NamedQuery(name="getGroupsByMember", query="select m.groupId from UserGroupMembershipEntity m join GroupEntity g on g.id = m.groupId where g.type = 1 and m.user.id = :userId"),
+        @NamedQuery(name="getGroupsByFederatedMember", query="select m.groupId from FederatedUserGroupMembershipEntity m join GroupEntity g on g.id = m.groupId where g.type = 1 and m.userId = :userId")
 })
 public class OrganizationEntity {
 
@@ -51,14 +54,23 @@ public class OrganizationEntity {
     @Column(name = "NAME")
     private String name;
 
+    @Column(name = "ALIAS")
+    private String alias;
+
+    @Column(name = "ENABLED")
+    private boolean enabled;
+
+    @Column(name = "DESCRIPTION")
+    private String description;
+
+    @Column(name = "REDIRECT_URL")
+    private String redirectUrl;
+
     @Column(name = "REALM_ID")
     private String realmId;
 
     @Column(name = "GROUP_ID")
     private String groupId;
-
-    @Column(name = "IDP_ALIAS")
-    private String idpAlias;
 
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true, mappedBy="organization")
     protected Set<OrganizationDomainEntity> domains = new HashSet<>();
@@ -73,6 +85,41 @@ public class OrganizationEntity {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getAlias() {
+        return alias;
+    }
+
+    public void setAlias(String alias) {
+        this.alias = alias;
+    }
+
+    public boolean isEnabled() {
+        return this.enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
+
+    public String getDescription() {
+        return this.description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getRedirectUrl() {
+        return redirectUrl;
+    }
+
+    public void setRedirectUrl(String redirectUrl) {
+        if (StringUtil.isNullOrEmpty(redirectUrl)) {
+            redirectUrl = null;
+        }
+        this.redirectUrl = redirectUrl;
     }
 
     public String getRealmId() {
@@ -93,14 +140,6 @@ public class OrganizationEntity {
 
     public String getName() {
         return name;
-    }
-
-    public String getIdpAlias() {
-        return idpAlias;
-    }
-
-    public void setIdpAlias(String idpAlias) {
-        this.idpAlias = idpAlias;
     }
 
     public Collection<OrganizationDomainEntity> getDomains() {

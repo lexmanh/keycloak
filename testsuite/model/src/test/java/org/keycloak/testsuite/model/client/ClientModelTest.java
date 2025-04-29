@@ -53,12 +53,15 @@ public class ClientModelTest extends KeycloakModelTest {
     @Override
     public void createEnvironment(KeycloakSession s) {
         RealmModel realm = createRealm(s, "realm");
+        s.getContext().setRealm(realm);
         realm.setDefaultRole(s.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
         this.realmId = realm.getId();
     }
 
     @Override
     public void cleanEnvironment(KeycloakSession s) {
+        RealmModel realm = s.realms().getRealm(realmId);
+        s.getContext().setRealm(realm);
         s.realms().removeRealm(realmId);
     }
 
@@ -150,6 +153,7 @@ public class ClientModelTest extends KeycloakModelTest {
         // create two clients, one realm role and one client role and assign both to one of the clients
         inComittedTransaction(1, (session , i) -> {
             final RealmModel realm = session.realms().getRealm(realmId);
+            session.getContext().setRealm(realm);
             ClientModel client1 = session.clients().addClient(realm, "client1");
             ClientModel client2 = session.clients().addClient(realm, "client2");
             RoleModel realmRole = session.roles().addRealmRole(realm, "realm-role");
@@ -162,6 +166,7 @@ public class ClientModelTest extends KeycloakModelTest {
         // check everything is OK
         inComittedTransaction(1, (session, i) -> {
             final RealmModel realm = session.realms().getRealm(realmId);
+            session.getContext().setRealm(realm);
             final ClientModel client1 = session.clients().getClientByClientId(realm, "client1");
             assertThat(client1.getScopeMappingsStream().count(), is(2L));
             assertThat(client1.getScopeMappingsStream().filter(r -> r.getName().equals("realm-role")).count(), is(1L));
@@ -172,6 +177,7 @@ public class ClientModelTest extends KeycloakModelTest {
         // remove the realm role
         inComittedTransaction(1, (session, i) -> {
             final RealmModel realm = session.realms().getRealm(realmId);
+            session.getContext().setRealm(realm);
             final RoleModel role = session.roles().getRealmRole(realm, "realm-role");
             session.roles().removeRole(role);
             return null;
@@ -180,6 +186,7 @@ public class ClientModelTest extends KeycloakModelTest {
         // check it is removed
         inComittedTransaction(1, (session, i) -> {
             final RealmModel realm = session.realms().getRealm(realmId);
+            session.getContext().setRealm(realm);
             final ClientModel client1 = session.clients().getClientByClientId(realm, "client1");
             assertThat(client1.getScopeMappingsStream().count(), is(1L));
             assertThat(client1.getScopeMappingsStream().filter(r -> r.getName().equals("client2-role")).count(), is(1L));
@@ -189,6 +196,7 @@ public class ClientModelTest extends KeycloakModelTest {
         // remove client role
         inComittedTransaction(1, (session, i) -> {
             final RealmModel realm = session.realms().getRealm(realmId);
+            session.getContext().setRealm(realm);
             final ClientModel client2 = session.clients().getClientByClientId(realm, "client2");
             final RoleModel role = session.roles().getClientRole(client2, "client2-role");
             session.roles().removeRole(role);
@@ -198,6 +206,7 @@ public class ClientModelTest extends KeycloakModelTest {
         // check both clients are removed
         inComittedTransaction(1, (session, i) -> {
             final RealmModel realm = session.realms().getRealm(realmId);
+            session.getContext().setRealm(realm);
             final ClientModel client1 = session.clients().getClientByClientId(realm, "client1");
             assertThat(client1.getScopeMappingsStream().count(), is(0L));
             return null;
@@ -206,6 +215,7 @@ public class ClientModelTest extends KeycloakModelTest {
         // remove clients
         inComittedTransaction(1, (session , i) -> {
             final RealmModel realm = session.realms().getRealm(realmId);
+            session.getContext().setRealm(realm);
             final ClientModel client1 = session.clients().getClientByClientId(realm, "client1");
             final ClientModel client2 = session.clients().getClientByClientId(realm, "client2");
             session.clients().removeClient(realm, client1.getId());

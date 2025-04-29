@@ -31,10 +31,14 @@ import org.keycloak.protocol.saml.SamlProtocol;
 import org.keycloak.representations.idm.ProtocolMapperRepresentation;
 import org.keycloak.representations.oidc.OIDCClientRepresentation;
 import org.keycloak.services.util.ResolveRelative;
+import org.keycloak.services.validation.Validation;
 
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
+
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -182,6 +186,7 @@ public class DefaultClientValidationProvider implements ClientValidationProvider
         new CibaClientValidation(context).validate();
         validateJwks(context);
         validateDefaultAcrValues(context);
+        validateMinimumAcrValue(context);
 
         return context.toResult();
     }
@@ -192,6 +197,7 @@ public class DefaultClientValidationProvider implements ClientValidationProvider
         validatePairwiseInOIDCClient(context);
         new CibaClientValidation(context).validate();
         validateDefaultAcrValues(context);
+        validateMinimumAcrValue(context);
 
         return context.toResult();
     }
@@ -235,13 +241,21 @@ public class DefaultClientValidationProvider implements ClientValidationProvider
         }
     }
 
+
     private void checkUri(FieldMessages field, String url, ValidationContext<ClientModel> context, boolean checkValidUrl, boolean checkFragment) {
         if (url == null || url.isEmpty()) {
             return;
         }
 
         try {
-            URI uri = new URI(url);
+            String urlToCheck=url;
+            if(field==FieldMessages.BACKCHANNEL_LOGOUT_URL){
+                if(checkCurlyBracketsBalanced(url))
+                    // This allow user to set parametrized backchannel logout url in this format : http://{example}/{example2}
+                    urlToCheck=url.replace("{","%7B").replace("}","%7D");
+                else throw new MalformedURLException();
+            }
+            URI uri = new URI(urlToCheck);
 
             boolean valid = true;
             if (uri.getScheme() != null && (uri.getScheme().equals("data") || uri.getScheme().equals("javascript"))) {
@@ -262,9 +276,40 @@ public class DefaultClientValidationProvider implements ClientValidationProvider
                 uri.toURL(); // throws an exception
             }
         }
+
         catch (MalformedURLException | IllegalArgumentException | URISyntaxException e) {
             context.addError(field.getFieldId(), field.getInvalid(), field.getInvalidKey());
         }
+    }
+
+    /**
+     * Check if url has curly brackets in correct position ('{' before '}')
+     * @param url to check
+     * @return true if curly brackets are balanced, else false
+     */
+    public static boolean checkCurlyBracketsBalanced(String url)
+    {
+        Deque<Character> stack
+                = new ArrayDeque<>();
+
+        for(char singleLetter:url.toCharArray()){
+            if (singleLetter == '{')
+            {
+                // Push the element in the stack
+                stack.push(singleLetter);
+                continue;
+            }
+            if(stack.isEmpty() && (singleLetter=='}')) return false;
+            char check;
+            if(singleLetter=='}'){
+                check=stack.pop();
+                if(check!='{') return false;
+            }
+
+        }
+
+
+        return stack.isEmpty();
     }
 
     private void checkUriLogo(FieldMessages field, String url, ValidationContext<ClientModel> context) {
@@ -337,9 +382,27 @@ public class DefaultClientValidationProvider implements ClientValidationProvider
         }
         for (String configuredAcr : defaultAcrValues) {
             if (acrToLoaMap.containsKey(configuredAcr)) continue;
-            if (!LoAUtil.getLoAConfiguredInRealmBrowserFlow(client.getRealm())
-                    .anyMatch(level -> configuredAcr.equals(String.valueOf(level)))) {
+            if (LoAUtil.getLoAConfiguredInRealmBrowserFlow(client.getRealm())
+                    .noneMatch(level -> configuredAcr.equals(String.valueOf(level)))) {
                 context.addError("defaultAcrValues", "Default ACR values need to contain values specified in the ACR-To-Loa mapping or number levels from set realm browser flow");
+            }
+        }
+    }
+
+    private void validateMinimumAcrValue(ValidationContext<ClientModel> context) {
+        ClientModel client = context.getObjectToValidate();
+        String minimumAcrValue = AcrUtils.getMinimumAcrValue(client);
+        if (minimumAcrValue != null) {
+            Map<String, Integer> acrToLoaMap = AcrUtils.getAcrLoaMap(client);
+            if (acrToLoaMap.isEmpty()) {
+                acrToLoaMap = AcrUtils.getAcrLoaMap(client.getRealm());
+            }
+
+            if(!acrToLoaMap.containsKey(minimumAcrValue)) {
+                if (LoAUtil.getLoAConfiguredInRealmBrowserFlow(client.getRealm())
+                        .noneMatch(level -> minimumAcrValue.equals(String.valueOf(level)))) {
+                    context.addError("minimumAcrValue", "Minimum ACR value needs to be value specified in the ACR-To-Loa mapping or number level from set realm browser flow");
+                }
             }
         }
     }

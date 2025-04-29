@@ -47,7 +47,6 @@ import org.keycloak.testsuite.arquillian.annotation.ModelTest;
 import org.keycloak.testsuite.federation.UserMapStorage;
 import org.keycloak.testsuite.federation.UserMapStorageFactory;
 import org.keycloak.testsuite.federation.UserPropertyFileStorageFactory;
-import org.keycloak.testsuite.forms.VerifyProfileTest;
 import org.keycloak.testsuite.pages.AppPage;
 import org.keycloak.testsuite.pages.LoginPage;
 import org.keycloak.testsuite.pages.RegisterPage;
@@ -56,6 +55,7 @@ import org.keycloak.testsuite.updaters.RealmAttributeUpdater;
 import org.keycloak.testsuite.util.AccountHelper;
 import org.keycloak.testsuite.util.GreenMailRule;
 import org.keycloak.testsuite.util.TestCleanup;
+import org.keycloak.testsuite.util.userprofile.UserProfileUtil;
 import org.keycloak.userprofile.DefaultAttributes;
 import org.openqa.selenium.Cookie;
 
@@ -85,6 +85,7 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -168,7 +169,7 @@ public class UserStorageTest extends AbstractAuthTest {
         createAppClientInRealm(testRealmResource().toRepresentation().getRealm());
 
         UserProfileResource userProfileRes = testRealmResource().users().userProfile();
-        VerifyProfileTest.enableUnmanagedAttributes(userProfileRes);
+        UserProfileUtil.enableUnmanagedAttributes(userProfileRes);
     }
 
     @After
@@ -265,15 +266,12 @@ public class UserStorageTest extends AbstractAuthTest {
         driver.navigate().to(oauth.AUTH_SERVER_ROOT + "/realms/" + testRealmResource().toRepresentation().getRealm() + "/login-actions/authenticate/" );
 
         Cookie sameSiteSessionCookie = driver.manage().getCookieNamed(CookieType.SESSION.getName());
-        Cookie legacySessionCookie = driver.manage().getCookieNamed(CookieType.SESSION.getSameSiteLegacyName());
 
+        Assert.assertNotNull(sameSiteSessionCookie);
+        Assert.assertNotNull(sameSiteSessionCookie.getValue());
         String cookieValue = sameSiteSessionCookie.getValue();
         assertThat(cookieValue.contains("spécial"), is(false));
-        assertThat(cookieValue.contains("sp%C3%A9cial"), is(true));
-
-        String legacyCookieValue = legacySessionCookie.getValue();
-        assertThat(legacyCookieValue.contains("spécial"), is(false));
-        assertThat(legacyCookieValue.contains("sp%C3%A9cial"), is(true));
+        assertThat(cookieValue.contains("sp%C3%A9cial"), is(false));
 
         AccountHelper.logout(testRealmResource(), "spécial");
     }
@@ -425,8 +423,8 @@ public class UserStorageTest extends AbstractAuthTest {
 
         memuser = user(uid).toRepresentation();
         assertNotNull(memuser);
-        assertNotNull(memuser.getOrigin());
-        ComponentRepresentation origin = testRealmResource().components().component(memuser.getOrigin()).toRepresentation();
+        assertNotNull(memuser.getFederationLink());
+        ComponentRepresentation origin = testRealmResource().components().component(memuser.getFederationLink()).toRepresentation();
         Assert.assertEquals("memory", origin.getName());
 
         testRealmResource().users().get(memuser.getId()).remove();
@@ -442,7 +440,7 @@ public class UserStorageTest extends AbstractAuthTest {
     public void testQuery() {
         Set<UserRepresentation> queried = new HashSet<>();
         int first = 0;
-        while (queried.size() < 8) {
+        while (queried.size() < 10) {
             List<UserRepresentation> results = testRealmResource().users().search("", first, 3);
             log.debugf("first=%s, results: %s", first, results.size());
             if (results.isEmpty()) {
@@ -456,7 +454,7 @@ public class UserStorageTest extends AbstractAuthTest {
             usernames.add(user.getUsername());
             log.info(user.getUsername());
         }
-        Assert.assertEquals(9, queried.size());
+        Assert.assertEquals(10, queried.size());
         Assert.assertTrue(usernames.contains("thor"));
         Assert.assertTrue(usernames.contains("zeus"));
         Assert.assertTrue(usernames.contains("apollo"));
@@ -466,6 +464,7 @@ public class UserStorageTest extends AbstractAuthTest {
         Assert.assertTrue(usernames.contains("rob"));
         Assert.assertTrue(usernames.contains("jules"));
         Assert.assertTrue(usernames.contains("danny"));
+        Assert.assertTrue(usernames.contains("UPPERCASE"));
 
         // test searchForUser
         List<UserRepresentation> users = testRealmResource().users().search("tbrady", 0, -1);
@@ -544,7 +543,7 @@ public class UserStorageTest extends AbstractAuthTest {
             UserModel userModel = session.users().getUserByUsername(realm, "thor");
             userModel.setSingleAttribute("weapon", longValue);
 
-            assertThat(session.users().searchForUserByUserAttributeStream(realm, "weapon", longValue).map(UserModel::getUsername).collect(Collectors.toList()), 
+            assertThat(session.users().searchForUserByUserAttributeStream(realm, "weapon", longValue).map(UserModel::getUsername).collect(Collectors.toList()),
                     containsInAnyOrder("thor"));
 
             // searching here is always case sensitive
@@ -779,7 +778,7 @@ public class UserStorageTest extends AbstractAuthTest {
         });
 
         setTimeOffset(1/2 * 60 * 60); // 1/2 hour in future
-        
+
         testingClient.server().run(session -> {
             RealmModel realm = session.realms().getRealmByName("test");
             UserModel user = session.users().getUserByUsername(realm, "thor");
@@ -987,6 +986,7 @@ public class UserStorageTest extends AbstractAuthTest {
 
         KeycloakModelUtils.runJobInTransaction(session.getKeycloakSessionFactory(), (KeycloakSession currentSession) -> {
             RealmModel realm = currentSession.realms().getRealmByName("test");
+            currentSession.getContext().setRealm(realm);
 
             UserModel user = currentSession.users().getUserByUsername(realm, "thor");
             Assert.assertFalse(StorageId.isLocalStorage(user.getId()));
@@ -1011,6 +1011,7 @@ public class UserStorageTest extends AbstractAuthTest {
 
         KeycloakModelUtils.runJobInTransaction(session.getKeycloakSessionFactory(), (KeycloakSession currentSession) -> {
             RealmModel realm = currentSession.realms().getRealmByName("test");
+            currentSession.getContext().setRealm(realm);
             UserModel user = currentSession.users().getUserByUsername(realm, "thor");
 
             // Assert priorities: password, otp1, otp2
@@ -1030,6 +1031,7 @@ public class UserStorageTest extends AbstractAuthTest {
 
         KeycloakModelUtils.runJobInTransaction(session.getKeycloakSessionFactory(), (KeycloakSession currentSession) -> {
             RealmModel realm = currentSession.realms().getRealmByName("test");
+            currentSession.getContext().setRealm(realm);
             UserModel user = currentSession.users().getUserByUsername(realm, "thor");
 
             // Assert priorities: password, otp2, otp1
@@ -1043,6 +1045,7 @@ public class UserStorageTest extends AbstractAuthTest {
 
         KeycloakModelUtils.runJobInTransaction(session.getKeycloakSessionFactory(), (KeycloakSession currentSession) -> {
             RealmModel realm = currentSession.realms().getRealmByName("test");
+            currentSession.getContext().setRealm(realm);
             UserModel user = currentSession.users().getUserByUsername(realm, "thor");
 
             // Assert priorities: otp2, password, otp1
@@ -1056,6 +1059,7 @@ public class UserStorageTest extends AbstractAuthTest {
 
         KeycloakModelUtils.runJobInTransaction(session.getKeycloakSessionFactory(), (KeycloakSession currentSession) -> {
             RealmModel realm = currentSession.realms().getRealmByName("test");
+            currentSession.getContext().setRealm(realm);
             UserModel user = currentSession.users().getUserByUsername(realm, "thor");
 
             // Assert priorities: otp2, otp1, password
@@ -1069,6 +1073,7 @@ public class UserStorageTest extends AbstractAuthTest {
 
         KeycloakModelUtils.runJobInTransaction(session.getKeycloakSessionFactory(), (KeycloakSession currentSession) -> {
             RealmModel realm = currentSession.realms().getRealmByName("test");
+            currentSession.getContext().setRealm(realm);
             UserModel user = currentSession.users().getUserByUsername(realm, "thor");
 
             // Assert priorities: otp2, otp1, password
@@ -1082,6 +1087,7 @@ public class UserStorageTest extends AbstractAuthTest {
 
         KeycloakModelUtils.runJobInTransaction(session.getKeycloakSessionFactory(), (KeycloakSession currentSession) -> {
             RealmModel realm = currentSession.realms().getRealmByName("test");
+            currentSession.getContext().setRealm(realm);
             UserModel user = currentSession.users().getUserByUsername(realm, "thor");
 
             // Assert priorities: otp2, password
@@ -1158,6 +1164,13 @@ public class UserStorageTest extends AbstractAuthTest {
         });
     }
 
+    @Test
+    public void testRespectUsernameFormatFromStorage() {
+        loginSuccessAndLogout("uppercase", "uppercase");
+        UserResource user = ApiUtil.findUserByUsernameId(testRealmResource(), "uppercase");
+        UserRepresentation rep = user.toRepresentation();
+        assertEquals("uppercase".toUpperCase(), rep.getUsername());
+    }
 
     private void assertOrder(List<CredentialModel> creds, String... expectedIds) {
         org.keycloak.testsuite.Assert.assertEquals(expectedIds.length, creds.size());

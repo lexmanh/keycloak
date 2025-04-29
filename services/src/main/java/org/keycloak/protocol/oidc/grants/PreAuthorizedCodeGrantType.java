@@ -24,10 +24,12 @@ import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
 import org.keycloak.common.Profile;
 import org.keycloak.common.util.SecretGenerator;
+import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventType;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientSessionContext;
+import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.oidc.utils.OAuth2Code;
 import org.keycloak.protocol.oidc.utils.OAuth2CodeParser;
@@ -44,17 +46,23 @@ public class PreAuthorizedCodeGrantType extends OAuth2GrantTypeBase {
 
     private static final Logger LOGGER = Logger.getLogger(PreAuthorizedCodeGrantType.class);
 
+    public static final String VC_ISSUANCE_FLOW = "VC-Issuance-Flow";
+
     @Override
     public Response process(Context context) {
         LOGGER.debug("Process grant request for preauthorized.");
         setContext(context);
 
-        String code = formParams.getFirst(OAuth2Constants.CODE);
+        // See: https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-token-request
+        String code = formParams.getFirst(PreAuthorizedCodeGrantTypeFactory.CODE_REQUEST_PARAM);
 
         if (code == null) {
+            // See: https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-token-request
+            String errorMessage = "Missing parameter: " + PreAuthorizedCodeGrantTypeFactory.CODE_REQUEST_PARAM;
+            event.detail(Details.REASON, errorMessage);
             event.error(Errors.INVALID_CODE);
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST,
-                    "Missing parameter: " + OAuth2Constants.CODE, Response.Status.BAD_REQUEST);
+                    errorMessage, Response.Status.BAD_REQUEST);
         }
         OAuth2CodeParser.ParseResult result = OAuth2CodeParser.parseCode(session, code, realm, event);
         if (result.isIllegalCode()) {
@@ -70,7 +78,8 @@ public class PreAuthorizedCodeGrantType extends OAuth2GrantTypeBase {
         AuthenticatedClientSessionModel clientSession = result.getClientSession();
         ClientSessionContext sessionContext = DefaultClientSessionContext.fromClientSessionAndScopeParameter(clientSession,
                 OAuth2Constants.SCOPE_OPENID, session);
-
+        clientSession.setNote(VC_ISSUANCE_FLOW, PreAuthorizedCodeGrantTypeFactory.GRANT_TYPE);
+        sessionContext.setAttribute(Constants.GRANT_TYPE, PreAuthorizedCodeGrantTypeFactory.GRANT_TYPE);
 
         // set the client as retrieved from the pre-authorized session
         session.getContext().setClient(result.getClientSession().getClient());
@@ -93,7 +102,7 @@ public class PreAuthorizedCodeGrantType extends OAuth2GrantTypeBase {
 
         event.success();
 
-        return cors.allowAllOrigins().builder(Response.ok(tokenResponse).type(MediaType.APPLICATION_JSON_TYPE)).build();
+        return cors.allowAllOrigins().add(Response.ok(tokenResponse).type(MediaType.APPLICATION_JSON_TYPE));
     }
 
     @Override
@@ -112,7 +121,7 @@ public class PreAuthorizedCodeGrantType extends OAuth2GrantTypeBase {
     public static String getPreAuthorizedCode(KeycloakSession session, AuthenticatedClientSessionModel authenticatedClientSession, int expirationTime) {
         String codeId = UUID.randomUUID().toString();
         String nonce = SecretGenerator.getInstance().randomString();
-        OAuth2Code oAuth2Code = new OAuth2Code(codeId, expirationTime, nonce, null, null, null, null,
+        OAuth2Code oAuth2Code = new OAuth2Code(codeId, expirationTime, nonce, null, null, null, null, null,
                 authenticatedClientSession.getUserSession().getId());
         return OAuth2CodeParser.persistCode(session, authenticatedClientSession, oAuth2Code);
     }

@@ -34,12 +34,12 @@ When using transient users, you should be aware of the following:
 
 - Roles and groups can be assigned to the transient users only by
   identity provider mappers of the respective identity provider.
-  This is especially important for the `default-roles-{realm}` realm role,
+  This is especially important for the `default-roles-{realm-name}` realm role,
   which is added to regular users automatically, but has to be assigned
   to transient users also through a mapper (e.g. the `Hardcoded Role` mapper type).
 
   An alternative to the Hardcoded Role mapper approach is to use groups which allows for more flexible role mappings.
-  To do so, create a group like `transient-users` and assign the `default-roles-{realm}` realm role to it.
+  To do so, create a group like `transient-users` and assign the `default-roles-{realm-name}` realm role to it.
   Then add a Hardcoded Group mapper to the identity-provider and select the `transient-users` group.
   This will ensure that all roles associated with the `transient-users` group are automatically assigned to the brokered users.
 
@@ -54,7 +54,7 @@ When using transient users, you should be aware of the following:
   needed since persistent users can manage offline tokens more easily
   by the Account Console. Also, the transient users feature contributes
   the purpose of not storing any personally identifiable information into the database.
-  Since offline sessions are persisted in database, the transient user data would be stored
+  Since sessions are persisted in database, the transient user data would be stored
   there as well. It is up to the administrator to determine whether this is acceptable or not.
 
 - Technically, transient user data is stored as part

@@ -1,4 +1,3 @@
-import { SelectVariant } from "@patternfly/react-core/deprecated";
 import { useTranslation } from "react-i18next";
 import { ClientSelect } from "../../../components/client/ClientSelect";
 
@@ -12,7 +11,8 @@ export const Client = () => {
       helpText={t("policyClientHelp")}
       required
       defaultValue={[]}
-      variant={SelectVariant.typeaheadMulti}
+      variant="typeaheadMulti"
+      clientKey="id"
     />
   );
 };

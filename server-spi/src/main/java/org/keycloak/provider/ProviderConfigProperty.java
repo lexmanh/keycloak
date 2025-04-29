@@ -28,6 +28,17 @@ import java.util.List;
  */
 public class ProviderConfigProperty {
     public static final String BOOLEAN_TYPE="boolean";
+
+    /**
+     * Integral Value
+     */
+    public static final String INTEGER_TYPE="Integer";
+
+    /**
+     * Arbitrary number, e.g. integral, floating-point.
+     */
+    public static final String NUMBER_TYPE="Number";
+
     public static final String STRING_TYPE="String";
 
     /**
@@ -67,6 +78,11 @@ public class ProviderConfigProperty {
      * Configure multiple (key, value) pairs
      */
     public static final String MAP_TYPE ="Map";
+
+    /**
+     * URL field
+     */
+    public static final String URL_TYPE ="Url";
 
     protected String name;
     protected String label;

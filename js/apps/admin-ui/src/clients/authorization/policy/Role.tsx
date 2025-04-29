@@ -1,32 +1,33 @@
+import { HelpItem, useFetch } from "@keycloak/keycloak-ui-shared";
 import { Button, Checkbox, FormGroup } from "@patternfly/react-core";
 import { MinusCircleIcon } from "@patternfly/react-icons";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { useState } from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { FormErrorText, HelpItem } from "@keycloak/keycloak-ui-shared";
-
-import { adminClient } from "../../../admin-client";
+import { useAdminClient } from "../../../admin-client";
 import { DefaultSwitchControl } from "../../../components/SwitchControl";
-import { AddRoleMappingModal } from "../../../components/role-mapping/AddRoleMappingModal";
+import {
+  AddRoleButton,
+  AddRoleMappingModal,
+  FilterType,
+} from "../../../components/role-mapping/AddRoleMappingModal";
 import { Row, ServiceRole } from "../../../components/role-mapping/RoleMapping";
-import { useFetch } from "../../../utils/useFetch";
 import type { RequiredIdValue } from "./ClientScope";
 
 export const Role = () => {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
-  const {
-    control,
-    getValues,
-    setValue,
-    formState: { errors },
-  } = useFormContext<{
+  const { control, getValues, setValue } = useFormContext<{
     roles?: RequiredIdValue[];
     fetchRoles?: boolean;
   }>();
   const values = getValues("roles");
 
   const [open, setOpen] = useState(false);
+  const [filterType, setFilterType] = useState<FilterType>("clients");
+
   const [selectedRoles, setSelectedRoles] = useState<Row[]>([]);
 
   useFetch(
@@ -60,22 +61,19 @@ export const Role = () => {
           <HelpItem helpText={t("policyRolesHelp")} fieldLabelId="roles" />
         }
         fieldId="roles"
-        isRequired
       >
         <Controller
           name="roles"
           control={control}
           defaultValue={[]}
-          rules={{
-            validate: (value?: RequiredIdValue[]) =>
-              value && value.filter((c) => c.id).length > 0,
-          }}
           render={({ field }) => (
             <>
               {open && (
                 <AddRoleMappingModal
                   id="role"
                   type="roles"
+                  title={t("assignRole")}
+                  filterType={filterType}
                   onAssign={(rows) => {
                     field.onChange([
                       ...(field.value || []),
@@ -87,18 +85,16 @@ export const Role = () => {
                   onClose={() => {
                     setOpen(false);
                   }}
-                  isLDAPmapper
                 />
               )}
-              <Button
+              <AddRoleButton
                 data-testid="select-role-button"
                 variant="secondary"
-                onClick={() => {
+                onFilerTypeChange={(type) => {
+                  setFilterType(type);
                   setOpen(true);
                 }}
-              >
-                {t("addRoles")}
-              </Button>
+              />
             </>
           )}
         />
@@ -155,7 +151,6 @@ export const Role = () => {
             </Tbody>
           </Table>
         )}
-        {errors.roles && <FormErrorText message={t("requiredRoles")} />}
       </FormGroup>
       <DefaultSwitchControl
         name="fetchRoles"

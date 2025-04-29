@@ -3,31 +3,31 @@ import type ClientPolicyConditionRepresentation from "@keycloak/keycloak-admin-c
 import type ClientPolicyRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientPolicyRepresentation";
 import type ComponentTypeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/componentTypeRepresentation";
 import {
+  HelpItem,
+  KeycloakSelect,
+  SelectVariant,
+  useAlerts,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
+import {
   ActionGroup,
   AlertVariant,
   Button,
   FormGroup,
   PageSection,
-} from "@patternfly/react-core";
-import {
-  Select,
   SelectOption,
-  SelectVariant,
-} from "@patternfly/react-core/deprecated";
+} from "@patternfly/react-core";
 import { camelCase } from "lodash-es";
 import { useState } from "react";
 import { Controller, FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { HelpItem } from "@keycloak/keycloak-ui-shared";
-import { adminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAdminClient } from "../admin-client";
 import { DynamicComponents } from "../components/dynamic/DynamicComponents";
 import { FormAccess } from "../components/form/FormAccess";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { useServerInfo } from "../context/server-info/ServerInfoProvider";
-import { useFetch } from "../utils/useFetch";
 import { toEditClientPolicy } from "./routes/EditClientPolicy";
 import type { EditClientPolicyConditionParams } from "./routes/EditCondition";
 
@@ -39,6 +39,8 @@ type ConfigProperty = ConfigPropertyRepresentation & {
 };
 
 export default function NewClientPolicyCondition() {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
   const navigate = useNavigate();
@@ -219,14 +221,14 @@ export default function NewClientPolicyCondition() {
               defaultValue={"any-client"}
               control={form.control}
               render={({ field }) => (
-                <Select
+                <KeycloakSelect
                   placeholderText={t("selectACondition")}
                   className="kc-conditionType-select"
                   data-testid="conditionType-select"
                   toggleId="provider"
                   isDisabled={!!conditionName}
-                  onToggle={(_event, toggle) => setOpenConditionType(toggle)}
-                  onSelect={(_, value) => {
+                  onToggle={(toggle) => setOpenConditionType(toggle)}
+                  onSelect={(value) => {
                     field.onChange(value);
                     setConditionProperties(
                       (value as ComponentTypeRepresentation).properties,
@@ -246,6 +248,7 @@ export default function NewClientPolicyCondition() {
                 >
                   {conditionTypes?.map((condition) => (
                     <SelectOption
+                      data-testid={condition.id}
                       selected={condition.id === field.value}
                       description={t(
                         camelCase(condition.id.replace(/-/g, " ")),
@@ -256,7 +259,7 @@ export default function NewClientPolicyCondition() {
                       {condition.id}
                     </SelectOption>
                   ))}
-                </Select>
+                </KeycloakSelect>
               )}
             />
           </FormGroup>

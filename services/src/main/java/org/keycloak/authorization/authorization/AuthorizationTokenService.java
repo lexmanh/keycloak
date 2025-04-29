@@ -161,7 +161,7 @@ public class AuthorizationTokenService {
             }
 
             KeycloakIdentity identity;
-            
+
             try {
                 identity = new KeycloakIdentity(keycloakSession, idToken);
             } catch (Exception cause) {
@@ -214,7 +214,7 @@ public class AuthorizationTokenService {
             if (identity != null) {
                 event.user(identity.getId());
             }
-            
+
             ResourceServer resourceServer = getResourceServer(ticket, request);
 
             Collection<Permission> permissions;
@@ -273,10 +273,11 @@ public class AuthorizationTokenService {
     }
 
     private Response createSuccessfulResponse(Object response, KeycloakAuthorizationRequest request) {
-        return Cors.add(request.getHttpRequest(), Response.status(Status.OK).type(MediaType.APPLICATION_JSON_TYPE).entity(response))
+        return Cors.builder()
                 .allowedOrigins(request.getKeycloakSession(), request.getKeycloakSession().getContext().getClient())
                 .allowedMethods(HttpMethod.POST)
-                .exposedHeaders(Cors.ACCESS_CONTROL_ALLOW_METHODS).build();
+                .exposedHeaders(Cors.ACCESS_CONTROL_ALLOW_METHODS)
+                .add(Response.status(Status.OK).type(MediaType.APPLICATION_JSON_TYPE).entity(response));
     }
 
     private boolean isPublicClientRequestingEntitlementWithClaims(KeycloakAuthorizationRequest request) {
@@ -313,7 +314,7 @@ public class AuthorizationTokenService {
         if (accessToken.getSessionState() == null) {
             // Create temporary (request-scoped) transient session
             UserModel user = TokenManager.lookupUserFromStatelessToken(keycloakSession, realm, accessToken);
-            userSessionModel = new UserSessionManager(keycloakSession).createUserSession(KeycloakModelUtils.generateId(), realm, user, user.getUsername(), request.getClientConnection().getRemoteAddr(),
+            userSessionModel = new UserSessionManager(keycloakSession).createUserSession(KeycloakModelUtils.generateId(), realm, user, user.getUsername(), request.getClientConnection().getRemoteHost(),
                     ServiceAccountConstants.CLIENT_AUTH, false, null, null, UserSessionModel.SessionPersistenceState.TRANSIENT);
         } else {
             userSessionModel = sessions.getUserSession(realm, accessToken.getSessionState());
@@ -345,7 +346,7 @@ public class AuthorizationTokenService {
             authSession.setProtocol(OIDCLoginProtocol.LOGIN_PROTOCOL);
             authSession.setClientNote(OIDCLoginProtocol.ISSUER, Urls.realmIssuer(keycloakSession.getContext().getUri().getBaseUri(), realm.getName()));
 
-            AuthenticationManager.setClientScopesInSession(authSession);
+            AuthenticationManager.setClientScopesInSession(keycloakSession, authSession);
             clientSessionCtx = TokenManager.attachAuthenticationSession(keycloakSession, userSessionModel, authSession);
         } else {
             clientSessionCtx = DefaultClientSessionContext.fromClientSessionScopeParameter(clientSession, keycloakSession);
@@ -725,7 +726,7 @@ public class AuthorizationTokenService {
                 limit.decrementAndGet();
             }
         }
-        
+
         return permission;
     }
 
@@ -809,7 +810,7 @@ public class AuthorizationTokenService {
             return clientConnection;
         }
 
-        public void addPermissions(List<String> permissionList, String permissionResourceFormat, boolean matchingUri) {
+        public void addPermissions(List<String> permissionList, String permissionResourceFormat, boolean matchingUri, Integer maxResults) {
             if (permissionResourceFormat == null) {
                 permissionResourceFormat = "id";
             }
@@ -819,7 +820,7 @@ public class AuthorizationTokenService {
                     addPermissionsById(permissionList);
                     break;
                 case "uri":
-                    addPermissionsByUri(permissionList, matchingUri);
+                    addPermissionsByUri(permissionList, matchingUri, maxResults);
                     break;
             }
 
@@ -839,7 +840,7 @@ public class AuthorizationTokenService {
             }
         }
 
-        private void addPermissionsByUri(List<String> permissionList, boolean matchingUri) {
+        private void addPermissionsByUri(List<String> permissionList, boolean matchingUri, Integer maxResults) {
             StoreFactory storeFactory = authorization.getStoreFactory();
 
             for (String permission : permissionList) {
@@ -855,7 +856,7 @@ public class AuthorizationTokenService {
                         throw invalidResourceException;
                     }
 
-                    List<Resource> resources = getResourceListByUri(uri, storeFactory, matchingUri);
+                    List<Resource> resources = getResourceListByUri(uri, storeFactory, matchingUri, maxResults);
 
                     if (resources == null || resources.isEmpty()) {
                         CorsErrorResponseException invalidResourceException = new CorsErrorResponseException(getCors(),
@@ -868,14 +869,14 @@ public class AuthorizationTokenService {
                 } else {
                     // resource uri and scopes are specified, or only scopes are specified
                     String[] scopes = parts[1].split(",");
-                    
+
                     if (uri.isEmpty()) {
                         // only scopes are specified
                         addPermission("", scopes);
                         return;
                     }
 
-                    List<Resource> resources = getResourceListByUri(uri, storeFactory, matchingUri);
+                    List<Resource> resources = getResourceListByUri(uri, storeFactory, matchingUri, maxResults);
 
                     if (resources == null || resources.isEmpty()) {
                         CorsErrorResponseException invalidResourceException = new CorsErrorResponseException(getCors(),
@@ -889,13 +890,13 @@ public class AuthorizationTokenService {
             }
         }
 
-        private List<Resource> getResourceListByUri(String uri, StoreFactory storeFactory, boolean matchingUri) {
+        private List<Resource> getResourceListByUri(String uri, StoreFactory storeFactory, boolean matchingUri, Integer maxResults) {
             Map<Resource.FilterOption, String[]> search = new EnumMap<>(Resource.FilterOption.class);
             search.put(Resource.FilterOption.URI, new String[] { uri });
             ResourceServer resourceServer = storeFactory.getResourceServerStore()
                 .findByClient(getRealm().getClientByClientId(getAudience()));
-            List<Resource> resources = storeFactory.getResourceStore().find(resourceServer, search, -1,
-                Constants.DEFAULT_MAX_RESULTS);
+
+            List<Resource> resources = storeFactory.getResourceStore().find(resourceServer, search, -1, maxResults);
 
             if (!matchingUri || !resources.isEmpty()) {
                 return resources;

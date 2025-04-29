@@ -234,17 +234,17 @@ public abstract class AbstractUserAdapter extends UserModelDefaultMethods {
     }
 
     /**
-     * This method should not be overriden
+     * This method should not be overridden
      *
      * @return
      */
     @Override
     public String getFederationLink() {
-        return null;
+        return StorageId.providerId(getId());
     }
 
     /**
-     * This method should not be overriden
+     * This method should not be overridden
      *
      * @return
      */
@@ -255,7 +255,7 @@ public abstract class AbstractUserAdapter extends UserModelDefaultMethods {
     }
 
     /**
-     * This method should not be overriden
+     * This method should not be overridden
      *
      * @return
      */
@@ -265,7 +265,7 @@ public abstract class AbstractUserAdapter extends UserModelDefaultMethods {
     }
 
     /**
-     * This method should not be overriden
+     * This method should not be overridden
      *
      * @return
      */

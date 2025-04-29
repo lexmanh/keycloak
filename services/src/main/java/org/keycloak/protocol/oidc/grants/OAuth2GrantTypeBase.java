@@ -21,19 +21,14 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
-
-import java.util.Map;
-import java.util.Objects;
-import java.util.function.Function;
-
 import org.jboss.logging.Logger;
-
 import org.keycloak.OAuth2Constants;
 import org.keycloak.OAuthErrorException;
+import org.keycloak.authentication.AuthenticationProcessor;
 import org.keycloak.common.ClientConnection;
 import org.keycloak.common.Profile;
-import org.keycloak.common.VerificationException;
 import org.keycloak.constants.AdapterConstants;
+import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.http.HttpRequest;
@@ -41,6 +36,7 @@ import org.keycloak.http.HttpResponse;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.ClientSessionContext;
+import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
@@ -51,16 +47,18 @@ import org.keycloak.protocol.oidc.utils.AuthorizeClientUtil;
 import org.keycloak.rar.AuthorizationRequestContext;
 import org.keycloak.representations.AccessToken;
 import org.keycloak.representations.AccessTokenResponse;
-import org.keycloak.representations.dpop.DPoP;
 import org.keycloak.services.CorsErrorResponseException;
 import org.keycloak.services.ServicesLogger;
 import org.keycloak.services.clientpolicy.ClientPolicyContext;
 import org.keycloak.services.clientpolicy.ClientPolicyException;
 import org.keycloak.services.cors.Cors;
 import org.keycloak.services.util.AuthorizationContextUtil;
-import org.keycloak.services.util.DPoPUtil;
 import org.keycloak.services.util.MtlsHoKTokenUtil;
 import org.keycloak.util.TokenUtil;
+
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 
 /**
  * Base class for OAuth 2.0 grant types
@@ -83,7 +81,6 @@ public abstract class OAuth2GrantTypeBase implements OAuth2GrantType {
     protected EventBuilder event;
     protected Cors cors;
     protected TokenManager tokenManager;
-    protected DPoP dPoP;
     protected HttpRequest request;
     protected HttpResponse response;
     protected HttpHeaders headers;
@@ -103,11 +100,11 @@ public abstract class OAuth2GrantTypeBase implements OAuth2GrantType {
         this.event = context.event;
         this.cors = context.cors;
         this.tokenManager = (TokenManager) context.tokenManager;
-        this.dPoP = context.dPoP;
     }
 
     protected Response createTokenResponse(UserModel user, UserSessionModel userSession, ClientSessionContext clientSessionCtx,
         String scopeParam, boolean code, Function<TokenManager.AccessTokenResponseBuilder, ClientPolicyContext> clientPolicyContextGenerator) {
+        clientSessionCtx.setAttribute(Constants.GRANT_TYPE, context.getGrantType());
         AccessToken token = tokenManager.createClientAccessToken(session, realm, client, user, userSession, clientSessionCtx);
 
         TokenManager.AccessTokenResponseBuilder responseBuilder = tokenManager
@@ -115,10 +112,14 @@ public abstract class OAuth2GrantTypeBase implements OAuth2GrantType {
         boolean useRefreshToken = clientConfig.isUseRefreshToken();
         if (useRefreshToken) {
             responseBuilder.generateRefreshToken();
+            if (TokenUtil.TOKEN_TYPE_OFFLINE.equals(responseBuilder.getRefreshToken().getType())
+                    && clientSessionCtx.getClientSession().getNote(AuthenticationProcessor.FIRST_OFFLINE_ACCESS) != null) {
+                // the online session can be removed if first created for offline access
+                session.sessions().removeUserSession(realm, userSession);
+            }
         }
 
         checkAndBindMtlsHoKToken(responseBuilder, useRefreshToken);
-        checkAndBindDPoPToken(responseBuilder, useRefreshToken && client.isPublicClient(), Profile.isFeatureEnabled(Profile.Feature.DPOP));
 
         if (TokenUtil.isOIDCRequest(scopeParam)) {
             responseBuilder.generateIDToken().generateAccessTokenHash();
@@ -128,6 +129,9 @@ public abstract class OAuth2GrantTypeBase implements OAuth2GrantType {
             try {
                 session.clientPolicy().triggerOnEvent(clientPolicyContextGenerator.apply(responseBuilder));
             } catch (ClientPolicyException cpe) {
+                event.detail(Details.REASON, Details.CLIENT_POLICY_ERROR);
+                event.detail(Details.CLIENT_POLICY_ERROR, cpe.getError());
+                event.detail(Details.CLIENT_POLICY_ERROR_DETAIL, cpe.getErrorDetail());
                 event.error(cpe.getError());
                 throw new CorsErrorResponseException(cors, cpe.getError(), cpe.getErrorDetail(), cpe.getErrorStatus());
             }
@@ -151,7 +155,7 @@ public abstract class OAuth2GrantTypeBase implements OAuth2GrantType {
 
         event.success();
 
-        return cors.builder(Response.ok(res).type(MediaType.APPLICATION_JSON_TYPE)).build();
+        return cors.add(Response.ok(res).type(MediaType.APPLICATION_JSON_TYPE));
     }
 
     protected void checkAndBindMtlsHoKToken(TokenManager.AccessTokenResponseBuilder responseBuilder, boolean useRefreshToken) {
@@ -165,24 +169,11 @@ public abstract class OAuth2GrantTypeBase implements OAuth2GrantType {
                     responseBuilder.getRefreshToken().setConfirmation(confirmation);
                 }
             } else {
+                String errorMessage = "Client Certification missing for MTLS HoK Token Binding";
+                event.detail(Details.REASON, errorMessage);
                 event.error(Errors.INVALID_REQUEST);
                 throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST,
-                        "Client Certification missing for MTLS HoK Token Binding", Response.Status.BAD_REQUEST);
-            }
-        }
-    }
-
-    protected void checkAndBindDPoPToken(TokenManager.AccessTokenResponseBuilder responseBuilder, boolean useRefreshToken, boolean isDPoPSupported) {
-        if (!isDPoPSupported) return;
-
-        if (clientConfig.isUseDPoP() || dPoP != null) {
-            DPoPUtil.bindToken(responseBuilder.getAccessToken(), dPoP);
-            responseBuilder.getAccessToken().type(DPoPUtil.DPOP_TOKEN_TYPE);
-            responseBuilder.responseTokenType(DPoPUtil.DPOP_TOKEN_TYPE);
-
-            // Bind refresh tokens for public clients, See "Section 5. DPoP Access Token Request" from DPoP specification
-            if (useRefreshToken) {
-                DPoPUtil.bindToken(responseBuilder.getRefreshToken(), dPoP);
+                        errorMessage, Response.Status.BAD_REQUEST);
             }
         }
     }
@@ -217,35 +208,22 @@ public abstract class OAuth2GrantTypeBase implements OAuth2GrantType {
         }
     }
 
-    protected void checkAndRetrieveDPoPProof(boolean isDPoPSupported) {
-        if (!isDPoPSupported) return;
-
-        if (clientConfig.isUseDPoP() || request.getHttpHeaders().getHeaderString(DPoPUtil.DPOP_HTTP_HEADER) != null) {
-            try {
-                dPoP = new DPoPUtil.Validator(session).request(request).uriInfo(session.getContext().getUri()).validate();
-                session.setAttribute(DPoPUtil.DPOP_SESSION_ATTRIBUTE, dPoP);
-            } catch (VerificationException ex) {
-                event.error(Errors.INVALID_DPOP_PROOF);
-                throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_DPOP_PROOF, ex.getMessage(), Response.Status.BAD_REQUEST);
-            }
-        }
-    }
-
     protected String getRequestedScopes() {
         String scope = formParams.getFirst(OAuth2Constants.SCOPE);
 
         boolean validScopes;
         if (Profile.isFeatureEnabled(Profile.Feature.DYNAMIC_SCOPES)) {
             AuthorizationRequestContext authorizationRequestContext = AuthorizationContextUtil.getAuthorizationRequestContextFromScopes(session, scope);
-            validScopes = TokenManager.isValidScope(scope, authorizationRequestContext, client);
+            validScopes = TokenManager.isValidScope(session, scope, authorizationRequestContext, client, null);
         } else {
-            validScopes = TokenManager.isValidScope(scope, client);
+            validScopes = TokenManager.isValidScope(session, scope, client, null);
         }
 
         if (!validScopes) {
+            String errorMessage = "Invalid scopes: " + scope;
+            event.detail(Details.REASON, errorMessage);
             event.error(Errors.INVALID_REQUEST);
-            throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_SCOPE, "Invalid scopes: " + scope,
-                    Response.Status.BAD_REQUEST);
+            throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_SCOPE, errorMessage, Response.Status.BAD_REQUEST);
         }
 
         return scope;

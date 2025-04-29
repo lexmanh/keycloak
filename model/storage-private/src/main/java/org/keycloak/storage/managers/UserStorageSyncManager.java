@@ -16,6 +16,8 @@
  */
 package org.keycloak.storage.managers;
 
+import org.infinispan.protostream.annotations.ProtoField;
+import org.infinispan.protostream.annotations.ProtoTypeId;
 import org.jboss.logging.Logger;
 import org.keycloak.cluster.ClusterEvent;
 import org.keycloak.cluster.ClusterListener;
@@ -26,8 +28,8 @@ import org.keycloak.component.ComponentModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.models.KeycloakSessionTask;
-import org.keycloak.models.StorageProviderRealmModel;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.StorageProviderRealmModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.storage.UserStorageProviderFactory;
@@ -107,7 +109,7 @@ public class UserStorageSyncManager {
                     @Override
                     public SynchronizationResult call() throws Exception {
                         int lastSync = Time.currentTime();
-                        SynchronizationResult result = ((ImportSynchronization)factory).sync(sessionFactory, realmId, provider);
+                        SynchronizationResult result = ((ImportSynchronization) factory).sync(sessionFactory, realmId, provider);
                         if (!result.isIgnored()) {
                             updateLastSyncInterval(sessionFactory, provider, realmId, lastSync);
                         }
@@ -153,7 +155,7 @@ public class UserStorageSyncManager {
                         // See when we did last sync.
                         int oldLastSync = provider.getLastSync();
                         int lastSync = Time.currentTime();
-                        SynchronizationResult result = ((ImportSynchronization)factory).syncSince(Time.toDate(oldLastSync), sessionFactory, realmId, provider);
+                        SynchronizationResult result = ((ImportSynchronization) factory).syncSince(Time.toDate(oldLastSync), sessionFactory, realmId, provider);
                         if (!result.isIgnored()) {
                             updateLastSyncInterval(sessionFactory, provider, realmId, lastSync);
                         }
@@ -176,13 +178,13 @@ public class UserStorageSyncManager {
 
     public static void notifyToRefreshPeriodicSyncAll(KeycloakSession session, RealmModel realm, boolean removed) {
         ((StorageProviderRealmModel) realm).getUserStorageProvidersStream().forEachOrdered(fedProvider ->
-           notifyToRefreshPeriodicSync(session, realm, fedProvider, removed));
+                notifyToRefreshPeriodicSync(session, realm, fedProvider, removed));
     }
-    
+
     public static void notifyToRefreshPeriodicSyncSingle(KeycloakSession session, RealmModel realm, ComponentModel component, boolean removed) {
         notifyToRefreshPeriodicSync(session, realm, new UserStorageProviderModel(component), removed);
     }
-    
+
     // Ensure all cluster nodes are notified
     public static void notifyToRefreshPeriodicSync(KeycloakSession session, RealmModel realm, UserStorageProviderModel provider, boolean removed) {
         UserStorageProviderFactory factory = (UserStorageProviderFactory) session.getKeycloakSessionFactory().getProviderFactory(UserStorageProvider.class, provider.getProviderId());
@@ -193,7 +195,7 @@ public class UserStorageSyncManager {
         final ClusterProvider cp = session.getProvider(ClusterProvider.class);
         if (cp != null) {
             UserStorageProviderClusterEvent event = UserStorageProviderClusterEvent.createEvent(removed, realm.getId(), provider);
-            cp.notify(USER_STORAGE_TASK_KEY, event, false, ClusterProvider.DCNotify.ALL_DCS);
+            cp.notify(USER_STORAGE_TASK_KEY, event, false);
         }
     }
 
@@ -266,7 +268,7 @@ public class UserStorageSyncManager {
                         break;
                 }
             } catch (Throwable t) {
-                logger.errorf(t,"Error occurred during %s users-sync in realm %s", //
+                logger.errorf(t, "Error occurred during %s users-sync in realm %s", //
                         syncMode, realm.getName());
             }
         }
@@ -355,12 +357,14 @@ public class UserStorageSyncManager {
 
 
     // Send to cluster during each update or remove of federationProvider, so all nodes can update sync periods
+    @ProtoTypeId(65540)
     public static class UserStorageProviderClusterEvent implements ClusterEvent {
 
         private boolean removed;
         private String realmId;
         private UserStorageProviderModel storageProvider;
 
+        @ProtoField(1)
         public boolean isRemoved() {
             return removed;
         }
@@ -369,6 +373,7 @@ public class UserStorageSyncManager {
             this.removed = removed;
         }
 
+        @ProtoField(2)
         public String getRealmId() {
             return realmId;
         }
@@ -377,6 +382,7 @@ public class UserStorageSyncManager {
             this.realmId = realmId;
         }
 
+        @ProtoField(3)
         public UserStorageProviderModel getStorageProvider() {
             return storageProvider;
         }

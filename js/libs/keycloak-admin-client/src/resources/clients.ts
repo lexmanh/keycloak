@@ -29,6 +29,7 @@ export interface ClientQuery extends PaginatedQuery {
   clientId?: string;
   viewableOnly?: boolean;
   search?: boolean;
+  q?: string;
 }
 
 export interface ResourceQuery extends PaginatedQuery {
@@ -138,7 +139,13 @@ export class Clients extends Resource<{ realm?: string }> {
   });
 
   public findUsersWithRole = this.makeRequest<
-    { id: string; roleName: string; first?: number; max?: number },
+    {
+      id: string;
+      roleName: string;
+      briefRepresentation?: boolean;
+      first?: number;
+      max?: number;
+    },
     UserRepresentation[]
   >({
     method: "GET",
@@ -413,13 +420,13 @@ export class Clients extends Resource<{ realm?: string }> {
   });
 
   public evaluateGenerateAccessToken = this.makeRequest<
-    { id: string; scope: string; userId: string },
+    { id: string; scope: string; userId: string; audience: string },
     Record<string, unknown>
   >({
     method: "GET",
     path: "/{id}/evaluate-scopes/generate-example-access-token",
     urlParamKeys: ["id"],
-    queryParamKeys: ["scope", "userId"],
+    queryParamKeys: ["scope", "userId", "audience"],
   });
 
   public evaluateGenerateUserInfo = this.makeRequest<
@@ -765,6 +772,20 @@ export class Clients extends Resource<{ realm?: string }> {
     method: "GET",
     path: "/{id}/authz/resource-server/resource/{resourceName}/scopes",
     urlParamKeys: ["id", "resourceName"],
+  });
+
+  public listPermissionScope = this.makeRequest<
+    {
+      id: string;
+      policyId?: string;
+      name?: string;
+      resource?: string;
+    } & PaginatedQuery,
+    PolicyRepresentation[]
+  >({
+    method: "GET",
+    path: "/{id}/authz/resource-server/permission/scope",
+    urlParamKeys: ["id"],
   });
 
   public createAuthorizationScope = this.makeUpdateRequest<

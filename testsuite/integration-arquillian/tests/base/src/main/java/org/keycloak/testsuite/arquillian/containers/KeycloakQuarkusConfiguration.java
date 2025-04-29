@@ -40,7 +40,6 @@ public class KeycloakQuarkusConfiguration implements ContainerConfiguration {
     private int startupTimeoutInSeconds = 300;
     private String route;
     private String keycloakConfigPropertyOverrides;
-    private HashMap<String, Object> keycloakConfigPropertyOverridesMap;
     private String profile;
     private String javaOpts;
     private boolean reaugmentBeforeStart;
@@ -48,7 +47,8 @@ public class KeycloakQuarkusConfiguration implements ContainerConfiguration {
 
     private FipsMode fipsMode = FipsMode.valueOfOption(System.getProperty("auth.server.fips.mode"));
 
-    private String defaultFeatures;
+    private String enabledFeatures;
+    private String disabledFeatures;
 
     @Override
     public void validate() throws ConfigurationException {
@@ -61,15 +61,6 @@ public class KeycloakQuarkusConfiguration implements ContainerConfiguration {
         setBindHttpsPort(newHttpsPort);
 
         log.infof("Keycloak will listen for http on port: %d, for https on port: %d, and for management on port: %d\n", newPort, newHttpsPort, managementPort);
-
-        if (this.keycloakConfigPropertyOverrides != null) {
-            try {
-                TypeReference<HashMap<String,Object>> typeRef = new TypeReference<HashMap<String,Object>>() {};
-                this.keycloakConfigPropertyOverridesMap = JsonSerialization.sysPropertiesAwareMapper.readValue(this.keycloakConfigPropertyOverrides, typeRef);
-            } catch (IOException ex) {
-                throw new ConfigurationException(ex);
-            }
-        }
     }
 
     public int getBindHttpPortOffset() {
@@ -181,18 +172,6 @@ public class KeycloakQuarkusConfiguration implements ContainerConfiguration {
         this.profile = profile;
     }
 
-    public String getKeycloakConfigPropertyOverrides() {
-        return keycloakConfigPropertyOverrides;
-    }
-
-    public void setKeycloakConfigPropertyOverrides(String keycloakConfigPropertyOverrides) {
-        this.keycloakConfigPropertyOverrides = keycloakConfigPropertyOverrides;
-    }
-
-    public Map<String, Object> getKeycloakConfigPropertyOverridesMap() {
-        return keycloakConfigPropertyOverridesMap;
-    }
-
     public void setJavaOpts(String javaOpts) {
         this.javaOpts = javaOpts;
     }
@@ -241,11 +220,19 @@ public class KeycloakQuarkusConfiguration implements ContainerConfiguration {
         this.fipsMode = fipsMode;
     }
 
-    public void setDefaultFeatures(String defaultFeatures) {
-        this.defaultFeatures = defaultFeatures;
+    public void setEnabledFeatures(String enabledFeatures) {
+        this.enabledFeatures = enabledFeatures;
     }
 
-    public String getDefaultFeatures() {
-        return defaultFeatures;
+    public String getEnabledFeatures() {
+        return enabledFeatures;
+    }
+
+    public String getDisabledFeatures() {
+        return disabledFeatures;
+    }
+
+    public void setDisabledFeatures(String disabledFeatures) {
+        this.disabledFeatures = disabledFeatures;
     }
 }

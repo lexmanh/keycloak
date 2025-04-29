@@ -1,23 +1,25 @@
 import type ComponentRepresentation from "@keycloak/keycloak-admin-client/lib/defs/componentRepresentation";
 import {
+  KeycloakSpinner,
+  TextControl,
+  useAlerts,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
+import {
   ActionGroup,
   AlertVariant,
   Button,
   PageSection,
 } from "@patternfly/react-core";
-import { useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
-import { TextControl } from "@keycloak/keycloak-ui-shared";
-import { adminClient } from "../../admin-client";
-import { useAlerts } from "../../components/alert/Alerts";
+import { useAdminClient } from "../../admin-client";
 import { DynamicComponents } from "../../components/dynamic/DynamicComponents";
 import { FormAccess } from "../../components/form/FormAccess";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import { useServerInfo } from "../../context/server-info/ServerInfoProvider";
 import { convertFormValuesToObject, convertToFormValues } from "../../util";
-import { useFetch } from "../../utils/useFetch";
 import { useParams } from "../../utils/useParams";
 import type { CustomUserFederationRouteParams } from "../routes/CustomUserFederation";
 import { toUserFederation } from "../routes/UserFederation";
@@ -26,8 +28,11 @@ import { SettingsCache } from "../shared/SettingsCache";
 import { SyncSettings } from "./SyncSettings";
 
 import "./custom-provider-settings.css";
+import { useState } from "react";
 
 export default function CustomProviderSettings() {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const { id, providerId } = useParams<CustomUserFederationRouteParams>();
   const navigate = useNavigate();
@@ -42,8 +47,8 @@ export default function CustomProviderSettings() {
   } = form;
 
   const { addAlert, addError } = useAlerts();
-  const { realm: realmName } = useRealm();
-  const [parentId, setParentId] = useState("");
+  const { realm: realmName, realmRepresentation: realm } = useRealm();
+  const [loading, setLoading] = useState(true);
 
   const provider = (
     useServerInfo().componentTypes?.[
@@ -64,16 +69,8 @@ export default function CustomProviderSettings() {
       } else if (id) {
         throw new Error(t("notFound"));
       }
+      setLoading(false);
     },
-    [],
-  );
-
-  useFetch(
-    () =>
-      adminClient.realms.findOne({
-        realm: realmName,
-      }),
-    (realm) => setParentId(realm?.id!),
     [],
   );
 
@@ -88,7 +85,7 @@ export default function CustomProviderSettings() {
       ),
       providerId,
       providerType: "org.keycloak.storage.UserStorageProvider",
-      parentId,
+      parentId: realm?.id,
     });
 
     try {
@@ -105,11 +102,13 @@ export default function CustomProviderSettings() {
       );
     } catch (error) {
       addError(
-        `${!id ? "createUserProviderError" : "userProviderSaveError"}`,
+        !id ? "createUserProviderError" : "userProviderSaveError",
         error,
       );
     }
   };
+
+  if (loading) return <KeycloakSpinner />;
 
   return (
     <FormProvider {...form}>

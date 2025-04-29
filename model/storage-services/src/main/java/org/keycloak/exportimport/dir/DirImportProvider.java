@@ -138,6 +138,9 @@ public class DirImportProvider extends AbstractFileBasedImportProvider {
         // Import realm first
         InputStream is = parseFile(realmFile);
         final RealmRepresentation realmRep = JsonSerialization.readValue(is, RealmRepresentation.class);
+        if (!realmRep.getRealm().equals(realmName)) {
+            throw new IllegalStateException(String.format("File name / realm name mismatch. %s, contains realm %s. File name should be %s", realmFile.getName(), realmRep.getRealm(), realmRep.getRealm() + "-realm.json"));
+        }
         final AtomicBoolean realmImported = new AtomicBoolean();
 
         KeycloakModelUtils.runJobInTransaction(factory, new ExportImportSessionTask() {
@@ -157,6 +160,7 @@ public class DirImportProvider extends AbstractFileBasedImportProvider {
                     KeycloakModelUtils.runJobInTransaction(factory, new ExportImportSessionTask() {
                         @Override
                         protected void runExportImportTask(KeycloakSession session) throws IOException {
+                            session.getContext().setRealm(session.realms().getRealmByName(realmName));
                             ImportUtils.importUsersFromStream(session, realmName, JsonSerialization.mapper, fis);
                             logger.infof("Imported users from %s", userFile.getAbsolutePath());
                         }
@@ -168,6 +172,7 @@ public class DirImportProvider extends AbstractFileBasedImportProvider {
                     KeycloakModelUtils.runJobInTransaction(factory, new ExportImportSessionTask() {
                         @Override
                         protected void runExportImportTask(KeycloakSession session) throws IOException {
+                            session.getContext().setRealm(session.realms().getRealmByName(realmName));
                             ImportUtils.importFederatedUsersFromStream(session, realmName, JsonSerialization.mapper, fis);
                             logger.infof("Imported federated users from %s", userFile.getAbsolutePath());
                         }
@@ -182,6 +187,7 @@ public class DirImportProvider extends AbstractFileBasedImportProvider {
 
                 @Override
                 public void runExportImportTask(KeycloakSession session) {
+                    session.getContext().setRealm(session.realms().getRealmByName(realmName));
                     RealmManager realmManager = new RealmManager(session);
                     realmManager.setupClientServiceAccountsAndAuthorizationOnImport(realmRep, false);
                 }

@@ -154,6 +154,34 @@ public class KeycloakDistConfiguratorTest {
 
         testFirstClassCitizen(expectedValues);
     }
+    
+    @Test
+    public void bootstrapAdmin() {
+        final Map<String, String> expectedValues = Map.of(
+                "bootstrap-admin-username", "something",
+                "bootstrap-admin-password", "something",
+                "bootstrap-admin-client-id", "else",
+                "bootstrap-admin-client-secret", "else"
+        );
+
+        testFirstClassCitizen(expectedValues);
+    }
+
+    @Test
+    public void tracing() {
+        final Map<String, String> expectedValues = Map.of(
+                "tracing-enabled", "true",
+                "tracing-endpoint", "http://my-tracing:4317",
+                "tracing-service-name", "my-best-keycloak",
+                "tracing-protocol", "http/protobuf",
+                "tracing-sampler-type", "parentbased_traceidratio",
+                "tracing-sampler-ratio", "0.01",
+                "tracing-compression", "gzip",
+                "tracing-resource-attributes", "service.namespace=keycloak-namespace,service.name=custom-service-name"
+        );
+
+        testFirstClassCitizen(expectedValues);
+    }
 
     /* UTILS */
 

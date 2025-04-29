@@ -17,10 +17,8 @@
 
 package org.keycloak.testsuite;
 
-import org.junit.After;
+import org.junit.Before;
 import org.keycloak.admin.client.resource.RealmResource;
-import org.keycloak.common.ClientConnection;
-import org.keycloak.common.util.Resteasy;
 import org.keycloak.common.util.reflections.Reflections;
 import org.keycloak.events.Details;
 import org.keycloak.models.KeycloakSession;
@@ -29,7 +27,7 @@ import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.EventRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
-import org.keycloak.testsuite.util.OAuthClient;
+import org.keycloak.testsuite.util.oauth.AccessTokenResponse;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -78,8 +76,13 @@ public abstract class AbstractTestRealmKeycloakTest extends AbstractKeycloakTest
     }
 
 
-    // Logout user after test
-    @After
+    @Before
+    @Override
+    public void beforeAbstractKeycloakTest() throws Exception {
+        deleteCookies();
+        super.beforeAbstractKeycloakTest();
+    }
+
     public void deleteCookies() {
         deleteAllCookiesForRealm("test");
     }
@@ -96,11 +99,11 @@ public abstract class AbstractTestRealmKeycloakTest extends AbstractKeycloakTest
 
     protected IDToken sendTokenRequestAndGetIDToken(EventRepresentation loginEvent) {
 
-        OAuthClient.AccessTokenResponse response = sendTokenRequestAndGetResponse(loginEvent);
+        AccessTokenResponse response = sendTokenRequestAndGetResponse(loginEvent);
         return oauth.verifyIDToken(response.getIdToken());
     }
 
-    protected OAuthClient.AccessTokenResponse sendTokenRequestAndGetResponse(EventRepresentation loginEvent) {
+    protected AccessTokenResponse sendTokenRequestAndGetResponse(EventRepresentation loginEvent) {
 
         Field eventsField = Reflections.findDeclaredField(this.getClass(), "events");
         AssertEvents events = null;
@@ -114,8 +117,8 @@ public abstract class AbstractTestRealmKeycloakTest extends AbstractKeycloakTest
         if(eventsField != null) {
             events.clear();
         }
-        String code = new OAuthClient.AuthorizationEndpointResponse(oauth).getCode();
-        OAuthClient.AccessTokenResponse response = oauth.doAccessTokenRequest(code, "password");
+        String code = oauth.parseLoginResponse().getCode();
+        AccessTokenResponse response = oauth.doAccessTokenRequest(code);
 
         Assert.assertEquals(200, response.getStatusCode());
 

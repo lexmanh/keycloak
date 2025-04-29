@@ -32,10 +32,12 @@ import org.keycloak.it.utils.KeycloakDistribution;
 import org.keycloak.it.utils.RawDistRootPath;
 import org.keycloak.it.utils.RawKeycloakDistribution;
 import org.keycloak.quarkus.runtime.Environment;
+import org.keycloak.quarkus.runtime.cli.command.DryRunMixin;
 import org.keycloak.quarkus.runtime.cli.command.Start;
 import org.keycloak.quarkus.runtime.cli.command.StartDev;
+import org.keycloak.quarkus.runtime.configuration.ConfigArgsConfigSource;
+import org.keycloak.quarkus.runtime.configuration.Configuration;
 import org.keycloak.quarkus.runtime.configuration.KeycloakPropertiesConfigSource;
-import org.keycloak.quarkus.runtime.configuration.test.TestConfigArgsConfigSource;
 import org.keycloak.quarkus.runtime.integration.QuarkusPlatform;
 
 import java.io.IOException;
@@ -45,7 +47,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -59,12 +60,10 @@ import static org.keycloak.quarkus.runtime.cli.command.Main.CONFIG_FILE_SHORT_NA
 public class CLITestExtension extends QuarkusMainTestExtension {
 
     private static final String SYS_PROPS = "sys-props";
-    private static final String KEY_VALUE_SEPARATOR = "[=]";
     private KeycloakDistribution dist;
     private DatabaseContainer databaseContainer;
     private InfinispanContainer infinispanContainer;
     private CLIResult result;
-    static String[] CLI_ARGS = new String[0];
 
     @Override
     public void beforeEach(ExtensionContext context) throws Exception {
@@ -73,24 +72,17 @@ public class CLITestExtension extends QuarkusMainTestExtension {
         getStore(context).put(SYS_PROPS, new HashMap<>(System.getProperties()));
 
         if (launch != null && distConfig == null) {
-            for (String arg : launch.value()) {
-                if (arg.contains(CONFIG_FILE_SHORT_NAME) || arg.contains(CONFIG_FILE_LONG_NAME)) {
-                    Pattern kvSeparator = Pattern.compile(KEY_VALUE_SEPARATOR);
-                    String[] cfKeyValue = kvSeparator.split(arg);
-                    setProperty(KeycloakPropertiesConfigSource.KEYCLOAK_CONFIG_FILE_PROP, cfKeyValue[1]);
+            ConfigArgsConfigSource.parseConfigArgs(List.of(launch.value()), (arg, value) -> {
+                if (arg.equals(CONFIG_FILE_SHORT_NAME) || arg.equals(CONFIG_FILE_LONG_NAME)) {
+                    setProperty(KeycloakPropertiesConfigSource.KEYCLOAK_CONFIG_FILE_PROP, value);
                 } else if (arg.startsWith("-D")) {
-                    // allow setting system properties from JVM tests
-                    int keyValueSeparator = arg.indexOf('=');
-
-                    if (keyValueSeparator == -1) {
-                        continue;
-                    }
-
-                    String name = arg.substring(2, keyValueSeparator);
-                    String value = arg.substring(keyValueSeparator + 1);
-                    setProperty(name, value);
+                    setProperty(arg, value);
                 }
-            }
+            }, arg -> {
+                if (arg.startsWith("-D")) {
+                    setProperty(arg, "");
+                }
+            });
         }
 
         configureDatabase(context);
@@ -110,12 +102,18 @@ public class CLITestExtension extends QuarkusMainTestExtension {
 
             configureEnvVars(context.getRequiredTestClass().getAnnotation(WithEnvVars.class));
             configureEnvVars(context.getRequiredTestMethod().getAnnotation(WithEnvVars.class));
+            boolean dryRun = context.getRequiredTestClass().getAnnotation(DryRun.class) != null
+                    || context.getRequiredTestMethod().getAnnotation(DryRun.class) != null;
+            if (dryRun && isRaw()) {
+                dist.setEnvVar(DryRunMixin.KC_DRY_RUN_ENV, "true");
+                dist.setEnvVar(DryRunMixin.KC_DRY_RUN_BUILD_ENV, "true");
+            }
 
             if (launch != null) {
                 result = dist.run(Stream.concat(List.of(launch.value()).stream(), List.of(distConfig.defaultOptions()).stream()).collect(Collectors.toList()));
             }
         } else {
-            CLI_ARGS = launch == null ? new String[] {} : launch.value();
+            ConfigArgsConfigSource.setCliArgs(launch == null ? new String[] {} : launch.value());
             configureProfile(context);
             super.beforeEach(context);
         }
@@ -134,13 +132,17 @@ public class CLITestExtension extends QuarkusMainTestExtension {
             return;
         }
 
-        if (RAW.equals(DistributionType.getCurrent().orElse(RAW))) {
+        if (isRaw()) {
             try {
                 dist.unwrap(RawKeycloakDistribution.class).copyProvider(provider.value().getDeclaredConstructor().newInstance());
             } catch (Exception cause) {
                 throw new RuntimeException("Failed to instantiate test provider: " + provider.getClass(), cause);
             }
         }
+    }
+
+    private boolean isRaw() {
+        return RAW.equals(DistributionType.getCurrent().orElse(RAW));
     }
 
     @Override
@@ -180,6 +182,7 @@ public class CLITestExtension extends QuarkusMainTestExtension {
         if (dist != null) {
             onKeepServerAlive(context.getRequiredTestMethod().getAnnotation(KeepServerAlive.class), false);
             dist.stop();
+            dist.clearEnv();
 
             if (distConfig != null && DistributionTest.ReInstall.BEFORE_TEST.equals(distConfig.reInstall())) {
                 dist = null;
@@ -195,7 +198,9 @@ public class CLITestExtension extends QuarkusMainTestExtension {
         HashMap props = getStore(context).remove(SYS_PROPS, HashMap.class);
         System.getProperties().clear();
         System.getProperties().putAll(props);
-        TestConfigArgsConfigSource.setCliArgs(new String[0]);
+        // TODO: for in-vm tests this is not all that it takes to reset static state
+        // may want to call AbstractConfigurationTest.resetConfiguration
+        Configuration.resetConfig();
         if (databaseContainer != null && databaseContainer.isRunning()) {
             databaseContainer.stop();
             databaseContainer = null;
@@ -204,7 +209,7 @@ public class CLITestExtension extends QuarkusMainTestExtension {
             infinispanContainer.stop();
         }
         result = null;
-        if (RAW.equals(DistributionType.getCurrent().orElse(RAW))) {
+        if (isRaw()) {
             if (distConfig != null && !DistributionTest.ReInstall.NEVER.equals(distConfig.reInstall()) && dist != null) {
                 try {
                     FileUtil.deleteDirectory(getDistPath().getDistRootPath().resolve("conf"));
@@ -253,7 +258,7 @@ public class CLITestExtension extends QuarkusMainTestExtension {
             throws ParameterResolutionException {
         Class<?> type = parameterContext.getParameter().getType();
 
-        if (type == LaunchResult.class) {
+        if (type == LaunchResult.class || type == CLIResult.class) {
             boolean isDistribution = getDistributionConfig(context) != null;
 
             if (isDistribution) {
@@ -288,7 +293,7 @@ public class CLITestExtension extends QuarkusMainTestExtension {
     public boolean supportsParameter(ParameterContext parameterContext, ExtensionContext extensionContext)
             throws ParameterResolutionException {
         Class<?> type = parameterContext.getParameter().getType();
-        return type == LaunchResult.class || type == RawDistRootPath.class || type == KeycloakDistribution.class;
+        return type == LaunchResult.class || type == CLIResult.class || type == RawDistRootPath.class || type == KeycloakDistribution.class;
     }
 
     private void configureProfile(ExtensionContext context) {

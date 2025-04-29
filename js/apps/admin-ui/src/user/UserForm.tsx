@@ -3,7 +3,13 @@ import type RealmRepresentation from "@keycloak/keycloak-admin-client/lib/defs/r
 import { UserProfileMetadata } from "@keycloak/keycloak-admin-client/lib/defs/userProfileMetadata";
 import type UserRepresentation from "@keycloak/keycloak-admin-client/lib/defs/userRepresentation";
 import {
-  ActionGroup,
+  FormErrorText,
+  HelpItem,
+  SwitchControl,
+  TextControl,
+  UserProfileFields,
+} from "@keycloak/keycloak-ui-shared";
+import {
   AlertVariant,
   Button,
   Chip,
@@ -18,27 +24,22 @@ import { TFunction } from "i18next";
 import { useEffect, useState } from "react";
 import { Controller, FormProvider, UseFormReturn } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
-import {
-  FormErrorText,
-  HelpItem,
-  SwitchControl,
-  TextControl,
-  UserProfileFields,
-} from "@keycloak/keycloak-ui-shared";
-
-import { adminClient } from "../admin-client";
+import { useAdminClient } from "../admin-client";
 import { DefaultSwitchControl } from "../components/SwitchControl";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import { FormAccess } from "../components/form/FormAccess";
 import { GroupPickerDialog } from "../components/group/GroupPickerDialog";
 import { useAccess } from "../context/access/Access";
+import { useWhoAmI } from "../context/whoami/WhoAmI";
 import { emailRegexPattern } from "../util";
 import useFormatDate from "../utils/useFormatDate";
 import { FederatedUserLink } from "./FederatedUserLink";
 import { UserFormFields, toUserFormFields } from "./form-state";
 import { toUsers } from "./routes/Users";
+import { FixedButtonsGroup } from "../components/form/FixedButtonGroup";
 import { RequiredActionMultiSelect } from "./user-credentials/RequiredActionMultiSelect";
+import { useNavigate } from "react-router-dom";
+import { CopyToClipboardButton } from "../components/copy-to-clipboard-button/CopyToClipboardButton";
 
 export type BruteForced = {
   isBruteForceProtected?: boolean;
@@ -52,6 +53,7 @@ export type UserFormProps = {
   bruteForce?: BruteForced;
   userProfileMetadata?: UserProfileMetadata;
   save: (user: UserFormFields) => void;
+  refresh?: () => void;
   onGroupsUpdate?: (groups: GroupRepresentation[]) => void;
 };
 
@@ -65,29 +67,29 @@ export const UserForm = ({
   },
   userProfileMetadata,
   save,
+  refresh,
   onGroupsUpdate,
 }: UserFormProps) => {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const formatDate = useFormatDate();
   const { addAlert, addError } = useAlerts();
   const { hasAccess } = useAccess();
   const isManager = hasAccess("manage-users");
   const canViewFederationLink = hasAccess("view-realm");
+  const { whoAmI } = useWhoAmI();
+  const currentLocale = whoAmI.getLocale();
 
-  const {
-    handleSubmit,
-    setValue,
-    watch,
-    control,
-    reset,
-    formState: { errors },
-  } = form;
-  const watchUsernameInput = watch("username");
+  const { handleSubmit, setValue, control, reset, formState } = form;
+  const { errors } = formState;
+
   const [selectedGroups, setSelectedGroups] = useState<GroupRepresentation[]>(
     [],
   );
   const [open, setOpen] = useState(false);
   const [locked, setLocked] = useState(isLocked);
+  const navigate = useNavigate();
 
   useEffect(() => {
     setValue("requiredActions", user?.requiredActions || []);
@@ -95,8 +97,11 @@ export const UserForm = ({
 
   const unLockUser = async () => {
     try {
-      await adminClient.attackDetection.del({ id: user!.id! });
+      await adminClient.users.update({ id: user!.id! }, { enabled: true });
       addAlert(t("unlockSuccess"), AlertVariant.success);
+      if (refresh) {
+        refresh();
+      }
     } catch (error) {
       addError("unlockError", error);
     }
@@ -132,6 +137,20 @@ export const UserForm = ({
     setOpen(!open);
   };
 
+  const onFormReset = () => {
+    if (user?.id) {
+      reset(toUserFormFields(user));
+    } else {
+      navigate(toUsers({ realm: realm.realm! }));
+    }
+  };
+
+  const allFieldsReadOnly = () =>
+    user?.userProfileMetadata?.attributes &&
+    !user?.userProfileMetadata?.attributes
+      ?.map((a) => a.readOnly)
+      .reduce((p, c) => p && c, true);
+
   return (
     <FormAccess
       isHorizontal
@@ -150,7 +169,12 @@ export const UserForm = ({
             }}
             canBrowse={isManager}
             onConfirm={(groups) => {
-              user?.id ? addGroups(groups || []) : addChips(groups || []);
+              if (user?.id) {
+                addGroups(groups || []);
+              } else {
+                addChips(groups || []);
+              }
+
               setOpen(false);
             }}
             onClose={() => setOpen(false)}
@@ -160,12 +184,24 @@ export const UserForm = ({
         {user?.id && (
           <>
             <FormGroup label={t("id")} fieldId="kc-id" isRequired>
-              <TextInput
-                id={user.id}
-                aria-label={t("userID")}
-                value={user.id}
-                readOnly
-              />
+              <InputGroup>
+                <InputGroupItem isFill>
+                  <TextInput
+                    id={user.id}
+                    aria-label={t("userID")}
+                    value={user.id}
+                    readOnly
+                  />
+                </InputGroupItem>
+                <InputGroupItem>
+                  <CopyToClipboardButton
+                    id={`user-${user.id}`}
+                    text={user.id}
+                    label={t("userID")}
+                    variant="control"
+                  />
+                </InputGroupItem>
+              </InputGroup>
             </FormGroup>
             <FormGroup
               label={t("createdAt")}
@@ -185,7 +221,7 @@ export const UserForm = ({
           label="requiredUserActions"
           help="requiredUserActionsHelp"
         />
-        {(user?.federationLink || user?.origin) && canViewFederationLink && (
+        {user?.federationLink && canViewFederationLink && (
           <FormGroup
             label={t("federationLink")}
             labelIcon={
@@ -210,6 +246,7 @@ export const UserForm = ({
               userProfileMetadata={userProfileMetadata}
               hideReadOnly={!user}
               supportedLocales={realm.supportedLocales || []}
+              currentLocale={currentLocale}
               t={
                 ((key: unknown, params) =>
                   t(key as string, params as any)) as TFunction
@@ -323,36 +360,15 @@ export const UserForm = ({
             )}
           </FormGroup>
         )}
-
-        <ActionGroup>
-          <Button
-            data-testid={!user?.id ? "create-user" : "save-user"}
-            isDisabled={
-              !user?.id &&
-              !watchUsernameInput &&
-              realm.registrationEmailAsUsername === false
-            }
-            variant="primary"
-            type="submit"
-          >
-            {user?.id ? t("save") : t("create")}
-          </Button>
-          <Button
-            data-testid="cancel-create-user"
-            variant="link"
-            onClick={user?.id ? () => reset(toUserFormFields(user)) : undefined}
-            component={
-              !user?.id
-                ? (props) => (
-                    <Link {...props} to={toUsers({ realm: realm.realm! })} />
-                  )
-                : undefined
-            }
-          >
-            {user?.id ? t("revert") : t("cancel")}
-          </Button>
-        </ActionGroup>
       </FormProvider>
+      <FixedButtonsGroup
+        name="user-creation"
+        saveText={user?.id ? t("save") : t("create")}
+        reset={onFormReset}
+        resetText={user?.id ? t("revert") : t("cancel")}
+        isDisabled={allFieldsReadOnly()}
+        isSubmit
+      />
     </FormAccess>
   );
 };

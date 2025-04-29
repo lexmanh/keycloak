@@ -3,25 +3,24 @@ import type { UserProfileConfig } from "@keycloak/keycloak-admin-client/lib/defs
 import {
   Button,
   ButtonVariant,
-  InputGroup,
-  SearchInput,
-  ToolbarItem,
-  InputGroupItem,
-} from "@patternfly/react-core";
-import {
   Dropdown,
   DropdownItem,
-  KebabToggle,
-} from "@patternfly/react-core/deprecated";
-import { ArrowRightIcon } from "@patternfly/react-icons";
+  DropdownList,
+  InputGroup,
+  InputGroupItem,
+  MenuToggle,
+  SearchInput,
+  ToolbarItem,
+} from "@patternfly/react-core";
+import { ArrowRightIcon, EllipsisVIcon } from "@patternfly/react-icons";
 import { ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useAccess } from "../../context/access/Access";
 import { SearchDropdown, SearchType } from "../../user/details/SearchFilter";
-import { UserAttribute } from "./UserDataTable";
-import { UserDataTableAttributeSearchForm } from "./UserDataTableAttributeSearchForm";
 import DropdownPanel from "../dropdown-panel/DropdownPanel";
+import { UserFilter } from "./UserDataTable";
+import { UserDataTableAttributeSearchForm } from "./UserDataTableAttributeSearchForm";
 
 type UserDataTableToolbarItemsProps = {
   searchDropdownOpen: boolean;
@@ -35,8 +34,8 @@ type UserDataTableToolbarItemsProps = {
   setSearchType: (searchType: SearchType) => void;
   searchUser: string;
   setSearchUser: (searchUser: string) => void;
-  activeFilters: UserAttribute[];
-  setActiveFilters: (activeFilters: UserAttribute[]) => void;
+  activeFilters: UserFilter;
+  setActiveFilters: (activeFilters: UserFilter) => void;
   refresh: () => void;
   profile: UserProfileConfig;
   clearAllFilters: () => void;
@@ -127,6 +126,7 @@ export function UserDataTableToolbarItems({
     return (
       <>
         <DropdownPanel
+          data-testid="select-attributes-dropdown"
           buttonText={t("selectAttributes")}
           setSearchDropdownOpen={setSearchDropdownOpen}
           searchDropdownOpen={searchDropdownOpen}
@@ -170,10 +170,21 @@ export function UserDataTableToolbarItems({
   ) : (
     <ToolbarItem>
       <Dropdown
-        toggle={<KebabToggle onToggle={(_event, open) => setKebabOpen(open)} />}
+        onOpenChange={(isOpen) => setKebabOpen(isOpen)}
+        toggle={(ref) => (
+          <MenuToggle
+            ref={ref}
+            isExpanded={kebabOpen}
+            variant="plain"
+            onClick={() => setKebabOpen(!kebabOpen)}
+          >
+            <EllipsisVIcon />
+          </MenuToggle>
+        )}
         isOpen={kebabOpen}
-        isPlain
-        dropdownItems={[
+        shouldFocusToggleOnSelect
+      >
+        <DropdownList>
           <DropdownItem
             key="deleteUser"
             component="button"
@@ -184,7 +195,7 @@ export function UserDataTableToolbarItems({
             }}
           >
             {t("deleteUser")}
-          </DropdownItem>,
+          </DropdownItem>
 
           <DropdownItem
             key="unlock"
@@ -195,9 +206,9 @@ export function UserDataTableToolbarItems({
             }}
           >
             {t("unlockAllUsers")}
-          </DropdownItem>,
-        ]}
-      />
+          </DropdownItem>
+        </DropdownList>
+      </Dropdown>
     </ToolbarItem>
   );
 

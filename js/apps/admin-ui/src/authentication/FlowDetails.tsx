@@ -1,12 +1,13 @@
 import AuthenticationFlowRepresentation from "@keycloak/keycloak-admin-client/lib/defs/authenticationFlowRepresentation";
 import type { AuthenticationProviderRepresentation } from "@keycloak/keycloak-admin-client/lib/defs/authenticatorConfigRepresentation";
 import AuthenticatorConfigRepresentation from "@keycloak/keycloak-admin-client/lib/defs/authenticatorConfigRepresentation";
+import { useAlerts, useFetch } from "@keycloak/keycloak-ui-shared";
 import {
   AlertVariant,
   Button,
   ButtonVariant,
-  DataList,
   DragDrop,
+  DropdownItem,
   Droppable,
   Label,
   PageSection,
@@ -16,23 +17,22 @@ import {
   ToolbarContent,
   ToolbarItem,
 } from "@patternfly/react-core";
-import { DropdownItem } from "@patternfly/react-core/deprecated";
 import { DomainIcon, TableIcon } from "@patternfly/react-icons";
+import { Table, Tbody } from "@patternfly/react-table";
 import { useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { adminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAdminClient } from "../admin-client";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useRealm } from "../context/realm-context/RealmContext";
-import { useFetch } from "../utils/useFetch";
 import useToggle from "../utils/useToggle";
 import { BindFlowDialog } from "./BindFlowDialog";
 import { BuildInLabel } from "./BuildInLabel";
 import { DuplicateFlowModal } from "./DuplicateFlowModal";
 import { EditFlowModal } from "./EditFlowModal";
 import { EmptyExecutionState } from "./EmptyExecutionState";
+import { AuthenticationProviderContextProvider } from "./components/AuthenticationProviderContext";
 import { FlowDiagram } from "./components/FlowDiagram";
 import { FlowHeader } from "./components/FlowHeader";
 import { FlowRow } from "./components/FlowRow";
@@ -52,6 +52,8 @@ export const providerConditionFilter = (
 ) => value.displayName?.startsWith("Condition ");
 
 export default function FlowDetails() {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const { realm } = useRealm();
   const { addAlert, addError } = useAlerts();
@@ -221,7 +223,9 @@ export default function FlowDetails() {
   };
 
   const [toggleDeleteDialog, DeleteConfirm] = useConfirmDialog({
-    titleKey: "deleteConfirmExecution",
+    titleKey: t("deleteConfirmExecution", {
+      name: selectedExecution?.displayName,
+    }),
     children: (
       <Trans i18nKey="deleteConfirmExecutionMessage">
         {" "}
@@ -292,6 +296,10 @@ export default function FlowDetails() {
           >
             {t("editInfo")}
           </DropdownItem>,
+        ]
+      : []),
+    ...(!builtIn && !usedBy
+      ? [
           <DropdownItem
             data-testid="delete-flow"
             key="delete"
@@ -304,7 +312,7 @@ export default function FlowDetails() {
   ];
 
   return (
-    <>
+    <AuthenticationProviderContextProvider>
       {bindFlowOpen && (
         <BindFlowDialog
           flowAlias={flow?.alias!}
@@ -385,7 +393,7 @@ export default function FlowDetails() {
                     variant="secondary"
                     onClick={() => setShowAddExecutionDialog(true)}
                   >
-                    {t("addStep")}
+                    {t("addExecution")}
                   </Button>
                 </ToolbarItem>
                 <ToolbarItem>
@@ -435,33 +443,34 @@ export default function FlowDetails() {
                 }}
               >
                 <Droppable hasNoWrapper>
-                  <DataList aria-label={t("flows")}>
+                  <Table aria-label={t("flows")} isTreeTable>
                     <FlowHeader />
                     <>
                       {executionList.expandableList.map((execution) => (
-                        <FlowRow
-                          builtIn={!!builtIn}
-                          key={execution.id}
-                          execution={execution}
-                          onRowClick={(execution) => {
-                            execution.isCollapsed = !execution.isCollapsed;
-                            setExecutionList(executionList.clone());
-                          }}
-                          onRowChange={update}
-                          onAddExecution={(execution, type) =>
-                            addExecution(execution.displayName!, type)
-                          }
-                          onAddFlow={(execution, flow) =>
-                            addFlow(execution.displayName!, flow)
-                          }
-                          onDelete={(execution) => {
-                            setSelectedExecution(execution);
-                            toggleDeleteDialog();
-                          }}
-                        />
+                        <Tbody draggable key={execution.id}>
+                          <FlowRow
+                            builtIn={!!builtIn}
+                            execution={execution}
+                            onRowClick={(execution) => {
+                              execution.isCollapsed = !execution.isCollapsed;
+                              setExecutionList(executionList.clone());
+                            }}
+                            onRowChange={update}
+                            onAddExecution={(execution, type) =>
+                              addExecution(execution.displayName!, type)
+                            }
+                            onAddFlow={(execution, flow) =>
+                              addFlow(execution.displayName!, flow)
+                            }
+                            onDelete={(execution) => {
+                              setSelectedExecution(execution);
+                              toggleDeleteDialog();
+                            }}
+                          />
+                        </Tbody>
                       ))}
                     </>
-                  </DataList>
+                  </Table>
                 </Droppable>
               </DragDrop>
             )}
@@ -510,6 +519,6 @@ export default function FlowDetails() {
             />
           ))}
       </PageSection>
-    </>
+    </AuthenticationProviderContextProvider>
   );
 }

@@ -17,25 +17,36 @@
 
 package org.keycloak.operator.testsuite.unit;
 
+import io.fabric8.kubernetes.api.model.Affinity;
+import io.fabric8.kubernetes.api.model.AffinityBuilder;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.IntOrString;
 import io.fabric8.kubernetes.api.model.PodTemplateSpec;
 import io.fabric8.kubernetes.api.model.PodTemplateSpecBuilder;
 import io.fabric8.kubernetes.api.model.ProbeBuilder;
+import io.fabric8.kubernetes.api.model.Toleration;
+import io.fabric8.kubernetes.api.model.TopologySpreadConstraint;
+import io.fabric8.kubernetes.api.model.TopologySpreadConstraintBuilder;
 import io.fabric8.kubernetes.api.model.Volume;
 import io.fabric8.kubernetes.api.model.VolumeMount;
 import io.fabric8.kubernetes.api.model.apps.StatefulSet;
 import io.fabric8.kubernetes.api.model.apps.StatefulSetBuilder;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.utils.Serialization;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
+import io.javaoperatorsdk.operator.api.reconciler.dependent.managed.ManagedWorkflowAndDependentResourceContext;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
-
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.keycloak.operator.Config;
 import org.keycloak.operator.Constants;
 import org.keycloak.operator.Utils;
 import org.keycloak.operator.controllers.KeycloakDeploymentDependentResource;
+import org.keycloak.operator.controllers.KeycloakDistConfigurator;
 import org.keycloak.operator.controllers.WatchedResources;
 import org.keycloak.operator.crds.v2alpha1.deployment.Keycloak;
 import org.keycloak.operator.crds.v2alpha1.deployment.KeycloakBuilder;
@@ -46,17 +57,19 @@ import org.keycloak.operator.crds.v2alpha1.deployment.spec.HttpSpecBuilder;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.UnsupportedSpec;
 import org.mockito.Mockito;
 
-import java.util.Optional;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import jakarta.inject.Inject;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.keycloak.operator.ContextUtils.DIST_CONFIGURATOR_KEY;
+import static org.keycloak.operator.ContextUtils.OLD_DEPLOYMENT_KEY;
+import static org.keycloak.operator.ContextUtils.OPERATOR_CONFIG_KEY;
+import static org.keycloak.operator.ContextUtils.WATCHED_RESOURCES_KEY;
 
 @QuarkusTest
 public class PodTemplateTest {
@@ -65,10 +78,20 @@ public class PodTemplateTest {
     WatchedResources watchedResources;
 
     @Inject
+    Config operatorConfig;
+
+    @Inject
+    KeycloakDistConfigurator distConfigurator;
+
     KeycloakDeploymentDependentResource deployment;
 
+    @BeforeEach
+    protected void setup() {
+        this.deployment = new KeycloakDeploymentDependentResource();
+    }
+
     private StatefulSet getDeployment(PodTemplateSpec podTemplate, StatefulSet existingDeployment, Consumer<KeycloakSpecBuilder> additionalSpec) {
-        var kc = new KeycloakBuilder().withNewMetadata().withName("instance").endMetadata().build();
+        var kc = new KeycloakBuilder().withNewMetadata().withName("instance").withNamespace("keycloak-ns").endMetadata().build();
         existingDeployment = new StatefulSetBuilder(existingDeployment).editOrNewSpec().editOrNewSelector()
                 .withMatchLabels(Utils.allInstanceLabels(kc))
                 .endSelector().endSpec().build();
@@ -87,9 +110,15 @@ public class PodTemplateTest {
 
         kc.setSpec(keycloakSpecBuilder.build());
 
+        //noinspection unchecked
         Context<Keycloak> context = Mockito.mock(Context.class);
-        Mockito.when(context.getSecondaryResource(StatefulSet.class)).thenReturn(Optional.ofNullable(existingDeployment));
-
+        ManagedWorkflowAndDependentResourceContext managedWorkflowAndDependentResourceContext = Mockito.mock(ManagedWorkflowAndDependentResourceContext.class);
+        Mockito.when(context.managedWorkflowAndDependentResourceContext()).thenReturn(managedWorkflowAndDependentResourceContext);
+        Mockito.when(managedWorkflowAndDependentResourceContext.getMandatory(OLD_DEPLOYMENT_KEY, StatefulSet.class)).thenReturn(existingDeployment);
+        Mockito.when(managedWorkflowAndDependentResourceContext.getMandatory(OPERATOR_CONFIG_KEY, Config.class)).thenReturn(operatorConfig);
+        Mockito.when(managedWorkflowAndDependentResourceContext.getMandatory(WATCHED_RESOURCES_KEY, WatchedResources.class)).thenReturn(watchedResources);
+        Mockito.when(managedWorkflowAndDependentResourceContext.getMandatory(DIST_CONFIGURATOR_KEY, KeycloakDistConfigurator.class)).thenReturn(distConfigurator);
+        Mockito.when(context.getClient()).thenReturn(Mockito.mock(KubernetesClient.class));
         return deployment.desired(kc, context);
     }
 
@@ -198,8 +227,8 @@ public class PodTemplateTest {
         // Assert
         assertEquals(1, podTemplate.getSpec().getContainers().get(0).getCommand().size());
         assertEquals(command, podTemplate.getSpec().getContainers().get(0).getCommand().get(0));
-        assertEquals(2, podTemplate.getSpec().getContainers().get(0).getArgs().size());
-        assertEquals(arg, podTemplate.getSpec().getContainers().get(0).getArgs().get(1));
+        assertEquals(3, podTemplate.getSpec().getContainers().get(0).getArgs().size());
+        assertEquals(arg, podTemplate.getSpec().getContainers().get(0).getArgs().get(2));
     }
 
     @Test
@@ -382,7 +411,13 @@ public class PodTemplateTest {
         // Assert
         assertNotNull(container);
         assertThat(container.getArgs()).doesNotContain(KeycloakDeploymentDependentResource.OPTIMIZED_ARG);
-        assertThat(container.getEnv().stream()).anyMatch(envVar -> envVar.getName().equals(KeycloakDeploymentDependentResource.KC_TRUSTSTORE_PATHS));
+        assertThat(container.getArgs()).contains("-Djgroups.bind.address=$(POD_IP)");
+
+        var envVars = container.getEnv();
+        assertThat(envVars.stream()).anyMatch(envVar -> envVar.getName().equals(KeycloakDeploymentDependentResource.KC_TRUSTSTORE_PATHS));
+        assertThat(envVars.stream()).anyMatch(envVar -> envVar.getName().equals(KeycloakDeploymentDependentResource.KC_TRACING_SERVICE_NAME));
+        assertThat(envVars.stream()).anyMatch(envVar -> envVar.getName().equals(KeycloakDeploymentDependentResource.KC_TRACING_RESOURCE_ATTRIBUTES));
+        assertThat(envVars.stream()).anyMatch(envVar -> envVar.getName().equals(KeycloakDeploymentDependentResource.POD_IP));
 
         var readiness = container.getReadinessProbe().getHttpGet();
         assertNotNull(readiness);
@@ -398,6 +433,34 @@ public class PodTemplateTest {
         assertNotNull(startup);
         assertThat(startup.getPath()).isEqualTo("/health/started");
         assertThat(startup.getPort().getIntVal()).isEqualTo(Constants.KEYCLOAK_MANAGEMENT_PORT);
+
+        var affinity = podTemplate.getSpec().getAffinity();
+        assertNotNull(affinity);
+        assertThat(Serialization.asYaml(affinity)).isEqualTo("""
+                ---
+                podAffinity:
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                  - podAffinityTerm:
+                      labelSelector:
+                        matchLabels:
+                          app: "keycloak"
+                          app.kubernetes.io/managed-by: "keycloak-operator"
+                          app.kubernetes.io/instance: "instance"
+                          app.kubernetes.io/component: "server"
+                      topologyKey: "topology.kubernetes.io/zone"
+                    weight: 10
+                podAntiAffinity:
+                  preferredDuringSchedulingIgnoredDuringExecution:
+                  - podAffinityTerm:
+                      labelSelector:
+                        matchLabels:
+                          app: "keycloak"
+                          app.kubernetes.io/managed-by: "keycloak-operator"
+                          app.kubernetes.io/instance: "instance"
+                          app.kubernetes.io/component: "server"
+                      topologyKey: "kubernetes.io/hostname"
+                    weight: 50
+                """);
     }
 
     @Test
@@ -482,6 +545,98 @@ public class PodTemplateTest {
         } finally {
             this.deployment.setUseServiceCaCrt(false);
         }
+    }
+
+    @Test
+    public void testPriorityClass() {
+        // Arrange
+        PodTemplateSpec additionalPodTemplate = null;
+
+        // Act
+        var podTemplate = getDeployment(additionalPodTemplate, null,
+                s -> s.withNewSchedulingSpec().withPriorityClassName("important").endSchedulingSpec())
+                .getSpec().getTemplate();
+
+        // Assert
+        assertThat(podTemplate.getSpec().getPriorityClassName()).isEqualTo("important");
+
+        podTemplate = getDeployment(new PodTemplateSpecBuilder().withNewSpec().withPriorityClassName("existing").endSpec().build(), null,
+                s -> s.withNewSchedulingSpec().withPriorityClassName("important").endSchedulingSpec())
+                .getSpec().getTemplate();
+
+        assertThat(podTemplate.getSpec().getPriorityClassName()).isEqualTo("existing");
+    }
+
+    @Test
+    public void testTolerations() {
+        // Arrange
+        PodTemplateSpec additionalPodTemplate = null;
+
+        Toleration toleration = new Toleration("NoSchedule", "key", "=", null, "value");
+
+        // Act
+        var podTemplate = getDeployment(additionalPodTemplate, null,
+                s -> s.withNewSchedulingSpec().addToTolerations(toleration).endSchedulingSpec())
+                .getSpec().getTemplate();
+
+        // Assert
+        assertThat(podTemplate.getSpec().getTolerations()).isEqualTo(List.of(toleration));
+
+        podTemplate = getDeployment(new PodTemplateSpecBuilder().withNewSpec().withTolerations(new Toleration()).endSpec().build(), null,
+                s -> s.withNewSchedulingSpec().addToTolerations(toleration).endSchedulingSpec())
+                .getSpec().getTemplate();
+
+        // Assert
+        assertThat(podTemplate.getSpec().getTolerations()).isNotEqualTo(List.of(toleration));
+
+    }
+
+    @Test
+    public void testTopologySpreadConstraints() {
+        // Arrange
+        PodTemplateSpec additionalPodTemplate = null;
+
+        TopologySpreadConstraint tsc = new TopologySpreadConstraintBuilder().withTopologyKey("key").build();
+
+        // Act
+        var podTemplate = getDeployment(additionalPodTemplate, null,
+                s -> s.withNewSchedulingSpec().addToTopologySpreadConstraints(tsc).endSchedulingSpec())
+                .getSpec().getTemplate();
+
+        // Assert
+        assertThat(podTemplate.getSpec().getTopologySpreadConstraints()).isEqualTo(List.of(tsc));
+
+        podTemplate = getDeployment(new PodTemplateSpecBuilder().withNewSpec().withTopologySpreadConstraints(new TopologySpreadConstraint()).endSpec().build(), null,
+                s -> s.withNewSchedulingSpec().addToTopologySpreadConstraints(tsc).endSchedulingSpec())
+                .getSpec().getTemplate();
+
+        // Assert
+        assertThat(podTemplate.getSpec().getTopologySpreadConstraints()).isNotEqualTo(List.of(tsc));
+    }
+
+    @Test
+    public void testAffinity() {
+        // Arrange
+        PodTemplateSpec additionalPodTemplate = null;
+
+        var affinity = new AffinityBuilder().withNewPodAffinity()
+                .addNewPreferredDuringSchedulingIgnoredDuringExecution().withNewPodAffinityTerm().withNamespaces("x")
+                .endPodAffinityTerm().endPreferredDuringSchedulingIgnoredDuringExecution().endPodAffinity().build();
+
+        // Act
+        var podTemplate = getDeployment(additionalPodTemplate, null,
+                s -> s.withNewSchedulingSpec().withAffinity(affinity).endSchedulingSpec())
+                .getSpec().getTemplate();
+
+        // Assert
+        assertThat(podTemplate.getSpec().getAffinity()).isEqualTo(affinity);
+
+        podTemplate = getDeployment(new PodTemplateSpecBuilder().withNewSpec().withAffinity(new Affinity()).endSpec().build(), null,
+                s -> s.withNewSchedulingSpec().withAffinity(affinity).endSchedulingSpec())
+                .getSpec().getTemplate();
+
+        // Assert
+        assertThat(podTemplate.getSpec().getAffinity()).isNotEqualTo(affinity);
     }
 
 }

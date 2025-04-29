@@ -18,7 +18,7 @@
 package org.keycloak.models.session;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.keycloak.common.Profile;
+import org.keycloak.common.util.MultiSiteUtils;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.ModelException;
@@ -168,8 +168,11 @@ public class PersistentUserSessionAdapter implements OfflineUserSessionModel {
     // Write updated model with latest serialized data
     public PersistentUserSessionModel getUpdatedModel() {
         try {
-            String updatedData = JsonSerialization.writeValueAsString(getData());
-            this.model.setData(updatedData);
+            if (data != null) {
+                // If data hasn't been initialized, it hasn't been touched and is unchanged. So need to deserialize and serialize it
+                String updatedData = JsonSerialization.writeValueAsString(getData());
+                this.model.setData(updatedData);
+            }
         } catch (IOException ioe) {
             throw new ModelException("Error persisting session", ioe);
         }
@@ -216,7 +219,7 @@ public class PersistentUserSessionAdapter implements OfflineUserSessionModel {
 
     @Override
     public String getLoginUsername() {
-        if (isOffline() || !Profile.isFeatureEnabled(Profile.Feature.PERSISTENT_USER_SESSIONS)) {
+        if (isOffline() || !MultiSiteUtils.isPersistentSessionsEnabled()) {
             return getUser().getUsername();
         } else {
             return getData().getLoginUsername();

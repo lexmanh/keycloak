@@ -20,20 +20,24 @@
 package org.keycloak.testsuite.federation.ldap;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 
 import org.jboss.arquillian.graphene.page.Page;
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.ClassRule;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.keycloak.admin.client.resource.UserResource;
+import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.component.ComponentModel;
 import org.keycloak.component.PrioritizedComponentModel;
 import org.keycloak.models.LDAPConstants;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
+import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.UserProfileAttributeMetadata;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.representations.userprofile.config.UPAttribute;
@@ -43,6 +47,8 @@ import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.storage.UserStorageProviderModel;
 import org.keycloak.storage.ldap.LDAPStorageProvider;
 import org.keycloak.storage.ldap.idm.model.LDAPObject;
+import org.keycloak.storage.ldap.mappers.UserAttributeLDAPStorageMapper;
+import org.keycloak.storage.ldap.mappers.UserAttributeLDAPStorageMapperFactory;
 import org.keycloak.testsuite.admin.ApiUtil;
 import org.keycloak.testsuite.pages.LoginUpdateProfilePage;
 import org.keycloak.testsuite.util.LDAPRule;
@@ -263,6 +269,16 @@ public class LDAPUserProfileTest extends AbstractLDAPTest {
             ldapCompModel.put(PrioritizedComponentModel.PRIORITY, "100");
             testRealm.addComponentModel(ldapModel);
             LDAPStorageProvider ldapProvider = LDAPTestUtils.getLdapProvider(session, ldapModel);
+
+            // if AD or RHDS, create new OU in a base DN because users.ldif is ignored for AD/RHDS
+            String vendor = ldapModel.getConfig().getFirst(LDAPConstants.VENDOR);
+            if (LDAPConstants.VENDOR_ACTIVE_DIRECTORY.equals(vendor)) {
+                LDAPTestUtils.addLdapOUinBaseDn(ldapProvider, "OtherPeople2");
+                LDAPTestUtils.removeAllLDAPUsers(ldapProvider, testRealm);
+            } else if (LDAPConstants.VENDOR_RHDS.equals(vendor)) {
+                LDAPTestUtils.addLdapOUinBaseDn(ldapProvider, "OtherPeople");
+                LDAPTestUtils.removeAllLDAPUsers(ldapProvider, testRealm);
+            }
             LDAPObject john = LDAPTestUtils.addLDAPUser(ldapProvider, testRealm, "anotherjohn", "AnotherJohn", "AnotherDoe", "anotherjohn@email.org", null, "1234");
             LDAPTestUtils.updateLDAPPassword(ldapProvider, john, "Password1");
         });
@@ -288,9 +304,138 @@ public class LDAPUserProfileTest extends AbstractLDAPTest {
             userResource = ApiUtil.findUserByUsernameId(testRealm(), "johnkeycloak");
             userRep = userResource.toRepresentation(true);
             assertProfileAttributes(userRep, null, true, "username", "email", "firstName", "lastName", "postal_code");
+
+            // the second provider is not readonly
+            userResource = ApiUtil.findUserByUsernameId(testRealm(), "anotherjohn");
+            userRep = userResource.toRepresentation(true);
+            assertProfileAttributes(userRep, null, false, "username", "email", "firstName", "lastName");
         } finally {
           setLDAPWritable();
         }
+    }
+
+    @Test
+    public void testUsernameRespectFormatFromExternalStore() {
+        Assume.assumeFalse("Skip for AD", testingClient.server().fetch(session -> {
+            LDAPTestContext ctx = LDAPTestContext.init(session);
+            return LDAPConstants.VENDOR_ACTIVE_DIRECTORY.equals(ctx.getLdapModel().getConfig().getFirst(LDAPConstants.VENDOR));
+        }, Boolean.class));
+
+        String upperCaseUsername = "JOHNKEYCLOAK3";
+        testingClient.server().run(session -> {
+            LDAPTestContext ctx = LDAPTestContext.init(session, "test-ldap");
+            RealmModel appRealm = ctx.getRealm();
+
+            ctx.getLdapModel().getConfig().put(LDAPConstants.USERNAME_LDAP_ATTRIBUTE, List.of(LDAPConstants.GIVENNAME));
+            ctx.getLdapModel().getConfig().put(LDAPConstants.RDN_LDAP_ATTRIBUTE, List.of(LDAPConstants.GIVENNAME));
+
+            ComponentModel ldapComponentMapper = LDAPTestUtils.addUserAttributeMapper(appRealm, ctx.getLdapModel(), "givename-mapper", "username", LDAPConstants.GIVENNAME);
+            ldapComponentMapper.put(UserAttributeLDAPStorageMapper.ALWAYS_READ_VALUE_FROM_LDAP, true);
+            appRealm.updateComponent(ldapComponentMapper);
+
+            appRealm.removeComponent(appRealm.getComponentsStream(ctx.getLdapModel().getId())
+                    .filter(mapper -> UserAttributeLDAPStorageMapperFactory.PROVIDER_ID.equals(mapper.getProviderId()))
+                    .filter((mapper) -> mapper.getName().equals(UserModel.USERNAME))
+                    .findAny().orElse(null));
+
+            appRealm.updateComponent(ctx.getLdapModel());
+
+            MultivaluedHashMap<String, String> otherAttrs = new MultivaluedHashMap<>();
+            otherAttrs.put(LDAPConstants.GIVENNAME, List.of(upperCaseUsername));
+
+            LDAPObject john3 = LDAPTestUtils.addLDAPUser(ctx.getLdapProvider(), appRealm, upperCaseUsername, "John", "Doe", "john3@email.org", otherAttrs);
+            LDAPTestUtils.updateLDAPPassword(ctx.getLdapProvider(), john3, "Password1");
+        });
+
+        UserResource johnResource = ApiUtil.findUserByUsernameId(testRealm(), upperCaseUsername);
+        UserRepresentation john = johnResource.toRepresentation(true);
+        Assert.assertEquals(upperCaseUsername, john.getUsername());
+
+        johnResource = ApiUtil.findUserByUsernameId(testRealm(), upperCaseUsername.toLowerCase());
+        john = johnResource.toRepresentation(true);
+        Assert.assertEquals(upperCaseUsername, john.getUsername());
+
+        loginPage.open();
+        loginPage.login(upperCaseUsername, "Password1");
+        appPage.assertCurrent();
+        testRealm().users().get(john.getId()).logout();
+        loginPage.open();
+        loginPage.login(upperCaseUsername.toLowerCase(), "Password1");
+        appPage.assertCurrent();
+    }
+
+    @Test
+    public void testUsernameRespectFormatFromExternalStoreAD() {
+        Assume.assumeTrue("Only run for AD", testingClient.server().fetch(session -> {
+            LDAPTestContext ctx = LDAPTestContext.init(session);
+            return LDAPConstants.VENDOR_ACTIVE_DIRECTORY.equals(ctx.getLdapModel().getConfig().getFirst(LDAPConstants.VENDOR));
+        }, Boolean.class));
+
+        String upperCaseUsername = "JOHNKEYCLOAK3";
+        testingClient.server().run(session -> {
+            LDAPTestContext ctx = LDAPTestContext.init(session, "test-ldap");
+            RealmModel appRealm = ctx.getRealm();
+
+            ComponentModel ldapComponentMapper = LDAPTestUtils.addUserAttributeMapper(appRealm, ctx.getLdapModel(), "username-cn-mapper", "username", LDAPConstants.CN);
+            ldapComponentMapper.put(UserAttributeLDAPStorageMapper.ALWAYS_READ_VALUE_FROM_LDAP, true);
+            appRealm.updateComponent(ldapComponentMapper);
+
+            LDAPObject john3 = LDAPTestUtils.addLDAPUser(ctx.getLdapProvider(), appRealm, upperCaseUsername, "John", "Doe", "john3@email.org", "12345");
+            LDAPTestUtils.updateLDAPPassword(ctx.getLdapProvider(), john3, "Password1");
+        });
+
+        UserResource johnResource = ApiUtil.findUserByUsernameId(testRealm(), upperCaseUsername);
+        UserRepresentation john = johnResource.toRepresentation(true);
+        Assert.assertEquals(upperCaseUsername, john.getUsername());
+
+        johnResource = ApiUtil.findUserByUsernameId(testRealm(), upperCaseUsername.toLowerCase());
+        john = johnResource.toRepresentation(true);
+        Assert.assertEquals(upperCaseUsername, john.getUsername());
+
+        loginPage.open();
+        loginPage.login(upperCaseUsername, "Password1");
+        appPage.assertCurrent();
+        testRealm().users().get(john.getId()).logout();
+        loginPage.open();
+        loginPage.login(upperCaseUsername.toLowerCase(), "Password1");
+        appPage.assertCurrent();
+    }
+
+    @Test
+    public void testUpdateEmailWhenEmailAsUsernameEnabledAndEditUsernameDisabled() {
+        String username = "johnkeycloak";
+        UserResource johnResource = ApiUtil.findUserByUsernameId(testRealm(), username);
+        UserRepresentation john = johnResource.toRepresentation(true);
+        String email = "john@email.org";
+        assertUser(john, username, email, "John", "Doe", "1234");
+
+        // enable email as username
+        RealmRepresentation realm = testRealm().toRepresentation();
+        boolean initialEditUserNameAllowed = realm.isEditUsernameAllowed();
+        boolean initialEmailUsernameEnabled = realm.isRegistrationEmailAsUsername();
+        realm.setEditUsernameAllowed(false);
+        realm.setRegistrationEmailAsUsername(true);
+        testRealm().update(realm);
+
+        // update the user to force updating the username as the email
+        john.setEmail("john@newemail.org");
+        johnResource.update(john);
+        john = johnResource.toRepresentation(true);
+        assertUser(john, "john@newemail.org", "john@newemail.org", "John", "Doe", "1234");
+        getCleanup().addCleanup(() -> {
+            try {
+                realm.setEditUsernameAllowed(initialEditUserNameAllowed);
+                realm.setRegistrationEmailAsUsername(initialEmailUsernameEnabled);
+                testRealm().update(realm);
+                UserRepresentation user = johnResource.toRepresentation(true);
+                user.setUsername(username);
+                user.setEmail(email);
+                johnResource.update(user);
+            } finally {
+                testRealm().update(realm);
+            }
+
+        });
     }
 
     private void setLDAPReadOnly() {

@@ -17,6 +17,7 @@
 package org.keycloak.saml.common.util;
 
 import org.keycloak.common.util.StringPropertyReplacer;
+import org.keycloak.common.util.SystemEnvProperties;
 import org.keycloak.saml.common.ErrorCodes;
 import org.keycloak.saml.common.PicketLinkLogger;
 import org.keycloak.saml.common.PicketLinkLoggerFactory;
@@ -210,7 +211,7 @@ public class StaxParserUtil {
 
         final String value = attribute.getValue();
 
-        return value == null ? null : trim(StringPropertyReplacer.replaceProperties(value));
+        return value == null ? null : trim(StringPropertyReplacer.replaceProperties(value, SystemEnvProperties.UNFILTERED::getProperty));
     }
 
     /**
@@ -250,7 +251,7 @@ public class StaxParserUtil {
      */
     public static String getAttributeValueRP(StartElement startElement, HasQName attrName) {
         final String value = getAttributeValue(startElement, attrName.getQName());
-        return value == null ? null : StringPropertyReplacer.replaceProperties(value);
+        return value == null ? null : StringPropertyReplacer.replaceProperties(value, SystemEnvProperties.UNFILTERED::getProperty);
     }
 
     /**
@@ -535,7 +536,7 @@ public class StaxParserUtil {
      */
     public static String getElementTextRP(XMLEventReader xmlEventReader) throws ParsingException {
         try {
-            return trim(StringPropertyReplacer.replaceProperties(xmlEventReader.getElementText()));
+            return trim(StringPropertyReplacer.replaceProperties(xmlEventReader.getElementText(), SystemEnvProperties.UNFILTERED::getProperty));
         } catch (XMLStreamException e) {
             throw logger.parserException(e);
         }
@@ -880,8 +881,10 @@ public class StaxParserUtil {
     @Deprecated
     public static void validate(StartElement startElement, String tag) {
         String foundElementTag = StaxParserUtil.getElementName(startElement);
-        if (!tag.equals(foundElementTag))
-            throw logger.parserExpectedTag(tag, foundElementTag);
+        if (!tag.equals(foundElementTag)) {
+            Location location = startElement.getLocation();
+            throw logger.parserExpectedTag(tag, foundElementTag, location.getLineNumber(), location.getColumnNumber());
+        }
     }
 
     /**
@@ -894,8 +897,10 @@ public class StaxParserUtil {
      */
     public static void validate(StartElement startElement, QName tag) {
         if (! Objects.equals(startElement.getName(), tag)) {
-            String foundElementTag = StaxParserUtil.getElementName(startElement);
-            throw logger.parserExpectedTag(tag.getLocalPart(), foundElementTag);
+            Location location = startElement.getLocation();
+            throw logger.parserExpectedTag(
+                    tag.toString(), startElement.getName().toString(),
+                    location.getLineNumber(), location.getColumnNumber());
         }
     }
 

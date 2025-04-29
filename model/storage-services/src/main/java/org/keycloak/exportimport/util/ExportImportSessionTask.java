@@ -17,6 +17,7 @@
 
 package org.keycloak.exportimport.util;
 
+import org.keycloak.exportimport.ExportImportConfig;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionTask;
 
@@ -36,6 +37,11 @@ public abstract class ExportImportSessionTask implements KeycloakSessionTask {
         } catch (IOException ioe) {
             throw new RuntimeException("Error during export/import: " + ioe.getMessage(), ioe);
         }
+    }
+
+    @Override
+    public boolean useExistingSession() {
+        return ExportImportConfig.isSingleTransaction();
     }
 
     protected abstract void runExportImportTask(KeycloakSession session) throws IOException;

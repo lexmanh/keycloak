@@ -34,10 +34,15 @@ export interface ConsentScopeRepresentation {
   displayTest: string;
 }
 
+export interface CredentialMetadataRepresentationMessage {
+  key: string;
+  parameters?: string[];
+}
+
 export interface CredentialMetadataRepresentation {
-  infoMessage: string;
-  warningMessageTitle: string;
-  warningMessageDescription: string;
+  infoMessage: CredentialMetadataRepresentationMessage;
+  warningMessageTitle: CredentialMetadataRepresentationMessage;
+  warningMessageDescription: CredentialMetadataRepresentationMessage;
   credential: CredentialRepresentation;
 }
 
@@ -201,4 +206,19 @@ export interface Group {
   id?: string;
   name: string;
   path: string;
+}
+
+export interface SupportedCredentialConfiguration {
+  id: string;
+  format: string;
+  scope: string;
+}
+export interface CredentialsIssuer {
+  credential_issuer: string;
+  credential_endpoint: string;
+  authorization_servers: string[];
+  credential_configurations_supported: Record<
+    string,
+    SupportedCredentialConfiguration
+  >;
 }

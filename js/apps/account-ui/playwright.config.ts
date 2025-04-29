@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
-import { getRootPath } from "./src/utils/getRootPath";
+
+import { getAccountUrl } from "./test/utils";
+
+const retryCount = parseInt(process.env.RETRY_COUNT || "0");
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -8,11 +11,15 @@ export default defineConfig({
   testDir: "./test",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: retryCount,
   workers: 1,
   reporter: process.env.CI ? [["github"], ["html"]] : "list",
+  expect: {
+    timeout: 20 * 1000,
+  },
+
   use: {
-    baseURL: `http://localhost:8080${getRootPath()}`,
+    baseURL: getAccountUrl(),
     trace: "on-first-retry",
   },
 
@@ -31,6 +38,7 @@ export default defineConfig({
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
+        viewport: { width: 1920, height: 1200 },
       },
       dependencies: ["import realms"],
     },

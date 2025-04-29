@@ -18,6 +18,7 @@
 
 package org.keycloak.testsuite.federation.ldap;
 
+import java.util.List;
 import java.util.Map;
 import org.hamcrest.MatcherAssert;
 import org.jboss.arquillian.graphene.page.Page;
@@ -26,10 +27,8 @@ import org.junit.ClassRule;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.admin.client.resource.UserResource;
-import org.keycloak.events.Details;
-import org.keycloak.events.Errors;
+import org.keycloak.component.ComponentModel;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.LDAPConstants;
 import org.keycloak.models.RealmModel;
@@ -42,7 +41,9 @@ import org.keycloak.storage.StorageId;
 import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.storage.ldap.LDAPStorageProvider;
 import org.keycloak.storage.ldap.idm.model.LDAPObject;
-import org.keycloak.testsuite.AssertEvents;
+import org.keycloak.storage.ldap.mappers.LDAPStorageMapper;
+import org.keycloak.storage.ldap.mappers.msad.MSADUserAccountControlStorageMapper;
+import org.keycloak.storage.ldap.mappers.msad.MSADUserAccountControlStorageMapperFactory;
 import org.keycloak.testsuite.admin.ApiUtil;
 import org.keycloak.testsuite.pages.AppPage;
 import org.keycloak.testsuite.pages.LoginConfigTotpPage;
@@ -55,7 +56,10 @@ import jakarta.ws.rs.ClientErrorException;
 import java.util.Collections;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -99,6 +103,16 @@ public class LDAPReadOnlyTest extends AbstractLDAPTest  {
 
             LDAPStorageProvider ldapFedProvider = LDAPTestUtils.getLdapProvider(session, ctx.getLdapModel());
             ldapFedProvider.getModel().put(LDAPConstants.EDIT_MODE, UserStorageProvider.EditMode.READ_ONLY.toString());
+
+            // change MSAD mapper config "ALWAYS_READ_ENABLED_VALUE_FROM_LDAP" to false as edit mode is read only so setEnable(false) is not propagated to LDAP
+            ComponentModel msadMapperComponent = appRealm.getComponentsStream(ctx.getLdapModel().getId(), LDAPStorageMapper.class.getName())
+                    .filter(c -> MSADUserAccountControlStorageMapperFactory.PROVIDER_ID.equals(c.getProviderId()))
+                    .findFirst().orElse(null);
+            if (msadMapperComponent != null) {
+                msadMapperComponent.getConfig().putSingle(MSADUserAccountControlStorageMapper.ALWAYS_READ_ENABLED_VALUE_FROM_LDAP, "false");
+                appRealm.updateComponent(msadMapperComponent);
+            }
+
             appRealm.updateComponent(ldapFedProvider.getModel());
         });
     }
@@ -123,7 +137,7 @@ public class LDAPReadOnlyTest extends AbstractLDAPTest  {
         totpPage.configure(totp.generateTOTP(totpPage.getTotpSecret()));
 
         Assert.assertEquals(AppPage.RequestType.AUTH_RESPONSE, appPage.getRequestType());
-        Assert.assertNotNull(oauth.getCurrentQuery().get(OAuth2Constants.CODE));
+        Assert.assertNotNull(oauth.parseLoginResponse().getCode());
 
         // Revert TOTP
         setTotpRequirementExecutionForRealm(AuthenticationExecutionModel.Requirement.CONDITIONAL);
@@ -151,6 +165,26 @@ public class LDAPReadOnlyTest extends AbstractLDAPTest  {
         // reset
         userRepresentation.setRequiredActions(Collections.emptyList());
         user.update(userRepresentation);
+    }
+
+    @Test
+    public void testUpdateLocale() {
+        RealmRepresentation realm = testRealm().toRepresentation();
+        realm.setInternationalizationEnabled(true);
+        testRealm().update(realm);
+        UserResource user = ApiUtil.findUserByUsernameId(testRealm(), "johnkeycloak");
+
+        UserRepresentation userRepresentation = user.toRepresentation();
+        String language = "pt_BR";
+        userRepresentation.setAttributes(Map.of(UserModel.LOCALE, List.of(language)));
+        user.update(userRepresentation);
+
+        userRepresentation = user.toRepresentation();
+        assertEquals(language, userRepresentation.getAttributes().get(UserModel.LOCALE).get(0));
+
+        userRepresentation.getAttributes().remove(UserModel.LOCALE);
+        user.update(userRepresentation);
+        assertNull(userRepresentation.getAttributes().get(UserModel.LOCALE));
     }
 
     // KEYCLOAK-3365

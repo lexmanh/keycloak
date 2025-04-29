@@ -12,8 +12,8 @@ final class HealthPropertyMappers {
     public static PropertyMapper<?>[] getHealthPropertyMappers() {
         return new PropertyMapper[] {
                 fromOption(HealthOptions.HEALTH_ENABLED)
-                        .to("quarkus.health.extensions.enabled")
-                        .paramLabel(Boolean.TRUE + "|" + Boolean.FALSE)
+                        // no need to map to a quarkus option, this option exists to
+                        // to control artifact / extension inclusion. Quarkus will default to enabled
                         .build()
         };
     }

@@ -1,4 +1,8 @@
 import {
+  ContinueCancelModal,
+  useEnvironment,
+} from "@keycloak/keycloak-ui-shared";
+import {
   Button,
   Chip,
   ChipGroup,
@@ -33,12 +37,11 @@ import {
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ContinueCancelModal, useAlerts } from "@keycloak/keycloak-ui-shared";
 import { fetchPermission, fetchResources, updatePermissions } from "../api";
 import { getPermissionRequests } from "../api/methods";
 import { Links } from "../api/parse-links";
 import { Permission, Resource } from "../api/representations";
-import { useEnvironment } from "../root/KeycloakContext";
+import { useAccountAlerts } from "../utils/useAccountAlerts";
 import { usePromise } from "../utils/usePromise";
 import { EditTheResource } from "./EditTheResource";
 import { PermissionRequest } from "./PermissionRequest";
@@ -61,7 +64,7 @@ type ResourcesTabProps = {
 export const ResourcesTab = ({ isShared = false }: ResourcesTabProps) => {
   const { t } = useTranslation();
   const context = useEnvironment();
-  const { addAlert, addError } = useAlerts();
+  const { addAlert, addError } = useAccountAlerts();
 
   const [params, setParams] = useState<Record<string, string>>({
     first: "0",
@@ -126,7 +129,7 @@ export const ResourcesTab = ({ isShared = false }: ResourcesTabProps) => {
       setDetails({});
       addAlert(t("unShareSuccess"));
     } catch (error) {
-      addError(t("unShareError", { error }).toString());
+      addError("unShareError", error);
     }
   };
 

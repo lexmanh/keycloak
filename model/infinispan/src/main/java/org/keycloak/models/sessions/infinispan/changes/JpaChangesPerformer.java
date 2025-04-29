@@ -113,6 +113,14 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
                 exceptions.forEach(ex::addSuppressed);
                 throw ex;
             }
+            changes.clear();
+        }
+    }
+
+    public void applyChangesSynchronously(KeycloakSession session) {
+        if (!changes.isEmpty()) {
+            changes.forEach(persistentUpdate -> persistentUpdate.perform(session));
+            changes.clear();
         }
     }
 
@@ -122,10 +130,10 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
         RealmModel realm = sessionUpdates.getRealm();
         UserSessionPersisterProvider userSessionPersister = innerSession.getProvider(UserSessionPersisterProvider.class);
 
-        if (merged.getOperation(sessionWrapper.getEntity()) == SessionUpdateTask.CacheOperation.REMOVE) {
+        if (merged.getOperation() == SessionUpdateTask.CacheOperation.REMOVE) {
             AuthenticatedClientSessionEntity entity = (AuthenticatedClientSessionEntity) sessionWrapper.getEntity();
             userSessionPersister.removeClientSession(entity.getUserSessionId(), entity.getClientId(), entity.isOffline());
-        } else if (merged.getOperation(sessionWrapper.getEntity()) == SessionUpdateTask.CacheOperation.ADD || merged.getOperation(sessionWrapper.getEntity()) == SessionUpdateTask.CacheOperation.ADD_IF_ABSENT){
+        } else if (merged.getOperation() == SessionUpdateTask.CacheOperation.ADD || merged.getOperation() == SessionUpdateTask.CacheOperation.ADD_IF_ABSENT){
             AuthenticatedClientSessionEntity entity = (AuthenticatedClientSessionEntity) sessionWrapper.getEntity();
             userSessionPersister.createClientSession(new AuthenticatedClientSessionModel() {
                 @Override
@@ -171,26 +179,6 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
                             return entity.getUserSessionId();
                         }
                     };
-                }
-
-                @Override
-                public String getCurrentRefreshToken() {
-                    return entity.getCurrentRefreshToken();
-                }
-
-                @Override
-                public void setCurrentRefreshToken(String currentRefreshToken) {
-                    throw new IllegalStateException("not implemented");
-                }
-
-                @Override
-                public int getCurrentRefreshTokenUseCount() {
-                    return entity.getCurrentRefreshTokenUseCount();
-                }
-
-                @Override
-                public void setCurrentRefreshTokenUseCount(int currentRefreshTokenUseCount) {
-                    throw new IllegalStateException("not implemented");
                 }
 
                 @Override
@@ -303,16 +291,6 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
                     }
 
                     @Override
-                    public void setCurrentRefreshToken(String currentRefreshToken) {
-                        clientSessionModel.setCurrentRefreshToken(currentRefreshToken);
-                    }
-
-                    @Override
-                    public void setCurrentRefreshTokenUseCount(int currentRefreshTokenUseCount) {
-                        clientSessionModel.setCurrentRefreshTokenUseCount(currentRefreshTokenUseCount);
-                    }
-
-                    @Override
                     public void setAction(String action) {
                         clientSessionModel.setAction(action);
                     }
@@ -374,16 +352,6 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
                     }
 
                     @Override
-                    public String getCurrentRefreshToken() {
-                        return clientSessionModel.getCurrentRefreshToken();
-                    }
-
-                    @Override
-                    public int getCurrentRefreshTokenUseCount() {
-                        return clientSessionModel.getCurrentRefreshTokenUseCount();
-                    }
-
-                    @Override
                     public UUID getId() {
                         return UUID.fromString(clientSessionModel.getId());
                     }
@@ -405,7 +373,7 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
                 };
                 sessionUpdates.getUpdateTasks().forEach(vSessionUpdateTask -> {
                     vSessionUpdateTask.runUpdate((V) authenticatedClientSessionEntity);
-                    if (vSessionUpdateTask.getOperation((V) authenticatedClientSessionEntity) == SessionUpdateTask.CacheOperation.REMOVE) {
+                    if (vSessionUpdateTask.getOperation() == SessionUpdateTask.CacheOperation.REMOVE) {
                         userSessionPersister.removeClientSession(entity.getUserSessionId(), entity.getClientId(), entity.isOffline());
                     }
                 });
@@ -422,9 +390,9 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
         UserSessionPersisterProvider userSessionPersister = innerSession.getProvider(UserSessionPersisterProvider.class);
         UserSessionEntity entity = (UserSessionEntity) sessionWrapper.getEntity();
 
-        if (merged.getOperation((V) entity) == SessionUpdateTask.CacheOperation.REMOVE) {
+        if (merged.getOperation() == SessionUpdateTask.CacheOperation.REMOVE) {
             userSessionPersister.removeUserSession(entry.getKey().toString(), entity.isOffline());
-        } else if (merged.getOperation(sessionWrapper.getEntity()) == SessionUpdateTask.CacheOperation.ADD || merged.getOperation(sessionWrapper.getEntity()) == SessionUpdateTask.CacheOperation.ADD_IF_ABSENT){
+        } else if (merged.getOperation() == SessionUpdateTask.CacheOperation.ADD || merged.getOperation() == SessionUpdateTask.CacheOperation.ADD_IF_ABSENT){
             userSessionPersister.createUserSession(new UserSessionModel() {
                 @Override
                 public String getId() {
@@ -550,7 +518,7 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
         } else {
             PersistentUserSessionAdapter userSessionModel = (PersistentUserSessionAdapter) userSessionPersister.loadUserSession(realm, entry.getKey().toString(), entity.isOffline());
             if (userSessionModel != null) {
-                UserSessionEntity userSessionEntity = new UserSessionEntity() {
+                UserSessionEntity userSessionEntity = new UserSessionEntity(userSessionModel.getId()) {
                     @Override
                     public Map<String, String> getNotes() {
                         return new HashMap<>() {
@@ -576,7 +544,7 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
 
                             @Override
                             public void clear() {
-                                userSessionModel.getNotes().forEach((k, v) -> userSessionModel.removeNote(k));
+                                userSessionModel.getNotes().clear();
                             }
                         };
                     }
@@ -609,16 +577,6 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
                     @Override
                     public void setRealmId(String realmId) {
                         userSessionModel.setRealm(innerSession.realms().getRealm(realmId));
-                    }
-
-                    @Override
-                    public String getId() {
-                        return userSessionModel.getId();
-                    }
-
-                    @Override
-                    public void setId(String id) {
-                        throw new IllegalStateException("not supported");
                     }
 
                     @Override
@@ -729,7 +687,7 @@ public class JpaChangesPerformer<K, V extends SessionEntity> implements SessionC
                 };
                 sessionUpdates.getUpdateTasks().forEach(vSessionUpdateTask -> {
                     vSessionUpdateTask.runUpdate((V) userSessionEntity);
-                    if (vSessionUpdateTask.getOperation((V)userSessionEntity) == SessionUpdateTask.CacheOperation.REMOVE) {
+                    if (vSessionUpdateTask.getOperation() == SessionUpdateTask.CacheOperation.REMOVE) {
                         userSessionPersister.removeUserSession(entry.getKey().toString(), entity.isOffline());
                     }
                 });

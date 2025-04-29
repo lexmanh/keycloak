@@ -1,14 +1,20 @@
 import type RealmRepresentation from "@keycloak/keycloak-admin-client/lib/defs/realmRepresentation";
-import { ActionGroup, Button, FormGroup } from "@patternfly/react-core";
 import {
-  Select,
-  SelectOption,
+  HelpItem,
+  KeycloakSelect,
+  NumberControl,
   SelectVariant,
-} from "@patternfly/react-core/deprecated";
+  SelectControl,
+} from "@keycloak/keycloak-ui-shared";
+import {
+  ActionGroup,
+  Button,
+  FormGroup,
+  SelectOption,
+} from "@patternfly/react-core";
 import { useEffect, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { HelpItem, NumberControl } from "@keycloak/keycloak-ui-shared";
 import { FormAccess } from "../../components/form/FormAccess";
 import { convertToFormValues } from "../../util";
 import { Time } from "./Time";
@@ -47,6 +53,8 @@ export const BruteForceDetection = ({
     BruteForceMode.PermanentAfterTemporaryLockout,
   ];
 
+  const bruteForceStrategyTypes = ["MULTIPLE", "LINEAR"];
+
   const setupForm = () => {
     convertToFormValues(realm, setValue);
     setIsBruteForceModeUpdated(false);
@@ -82,10 +90,10 @@ export const BruteForceDetection = ({
             />
           }
         >
-          <Select
+          <KeycloakSelect
             toggleId="kc-brute-force-mode"
             onToggle={() => setIsBruteForceModeOpen(!isBruteForceModeOpen)}
-            onSelect={(_, value) => {
+            onSelect={(value) => {
               switch (value as BruteForceMode) {
                 case BruteForceMode.Disabled:
                   form.setValue("bruteForceProtected", false);
@@ -122,7 +130,7 @@ export const BruteForceDetection = ({
                 {t(`bruteForceMode.${mode}`)}
               </SelectOption>
             ))}
-          </Select>
+          </KeycloakSelect>
         </FormGroup>
         {bruteForceMode !== BruteForceMode.Disabled && (
           <>
@@ -150,6 +158,18 @@ export const BruteForceDetection = ({
               bruteForceMode ===
                 BruteForceMode.PermanentAfterTemporaryLockout) && (
               <>
+                <SelectControl
+                  name="bruteForceStrategy"
+                  label={t("bruteForceStrategy")}
+                  labelIcon={t("bruteForceStrategyHelp", {
+                    failureFactor: form.getValues("failureFactor"),
+                  })}
+                  controller={{ defaultValue: "" }}
+                  options={bruteForceStrategyTypes.map((key) => ({
+                    key,
+                    value: t(`bruteForceStrategy.${key}`),
+                  }))}
+                />
                 <Time name="waitIncrementSeconds" />
                 <Time name="maxFailureWaitSeconds" />
                 <Time name="maxDeltaTimeSeconds" />

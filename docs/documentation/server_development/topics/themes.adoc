@@ -105,7 +105,7 @@ You have now created a theme with support for the login type.
 . For *Login Theme* select *mytheme* and click *Save*.
 . Open the login page for the realm.
 +
-You can do this either by logging in through your application or by opening the Account Console (`/realms/{realm name}/account`).
+You can do this either by logging in through your application or by opening the Account Console (`/realms/{realm-name}/account`).
 
 . To see the effect of changing the parent theme, set `parent=keycloak` in `theme.properties` and refresh the login page.
 
@@ -241,7 +241,26 @@ Or to use directly in HTML templates add the following to a custom HTML template
 <img src="${url.resourcesPath}/img/image.jpg" alt="My image description">
 ----
 
-==== Adding an image to a email theme
+[[_theme_custom_footer]]
+==== Adding a custom footer to a login theme
+
+In order to use a custom footer, create a `footer.ftl` file in your custom login theme with the desired content.
+
+An example for a custom `footer.ftl` may look like this:
+```
+<#macro content>
+<#-- footer at the end of the login box -->
+<div>
+    <ul id="kc-login-footer-links">
+        <li><a href="#home">Home</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#contact">Contact</a></li>
+    </ul>
+<div>
+</#macro>
+```
+
+==== Adding an image to an email theme
 
 To make images available to the theme add them to the `<THEME TYPE>/email/resources/img` directory of your theme. These can be used from within directly in HTML templates.
 
@@ -442,3 +461,4 @@ To deploy the archive to {project_name}, add it to the `providers/` directory of
 === Additional resources for Themes
 * For the inspiration, see <<_default-themes,Default Themes>> bundled inside {project_name}.
 * {quickstartRepo_link}[{quickstartRepo_name}] - Directory `extension` of the quickstarts repository contains some theme examples, which can be also used as an inspiration.
+

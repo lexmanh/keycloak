@@ -1,25 +1,27 @@
 package org.keycloak.quarkus.runtime.cli;
 
+import static java.lang.String.format;
+import static org.keycloak.quarkus.runtime.cli.command.AbstractStartCommand.OPTIMIZED_BUILD_OPTION_LONG;
+
+import java.io.PrintWriter;
+import java.util.Optional;
+import java.util.function.BooleanSupplier;
+import java.util.stream.Stream;
+
 import org.keycloak.quarkus.runtime.cli.command.AbstractCommand;
 import org.keycloak.quarkus.runtime.cli.command.Start;
 import org.keycloak.quarkus.runtime.configuration.KcUnmatchedArgumentException;
 import org.keycloak.quarkus.runtime.configuration.mappers.PropertyMapper;
 import org.keycloak.quarkus.runtime.configuration.mappers.PropertyMappers;
 
-import java.io.PrintWriter;
-import java.util.stream.Stream;
-
 import picocli.CommandLine;
 import picocli.CommandLine.IParameterExceptionHandler;
+import picocli.CommandLine.MissingParameterException;
+import picocli.CommandLine.Model.ArgSpec;
 import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Model.OptionSpec;
 import picocli.CommandLine.ParameterException;
 import picocli.CommandLine.UnmatchedArgumentException;
-
-import java.util.Optional;
-import java.util.function.BooleanSupplier;
-
-import static java.lang.String.format;
-import static org.keycloak.quarkus.runtime.cli.command.AbstractStartCommand.OPTIMIZED_BUILD_OPTION_LONG;
 
 public class ShortErrorMessageHandler implements IParameterExceptionHandler {
 
@@ -30,23 +32,21 @@ public class ShortErrorMessageHandler implements IParameterExceptionHandler {
         String errorMessage = ex.getMessage();
         String additionalSuggestion = null;
 
-        if (ex instanceof UnmatchedArgumentException) {
-            UnmatchedArgumentException uae = (UnmatchedArgumentException) ex;
-
+        if (ex instanceof UnmatchedArgumentException uae) {
             String[] unmatched = getUnmatchedPartsByOptionSeparator(uae, "=");
 
             String cliKey = unmatched[0];
 
-            PropertyMapper<?> mapper = PropertyMappers.getMapper(cliKey);
+            PropertyMapper<?> mapper = PropertyMappers.getMapperByCliKey(cliKey);
 
-            final boolean isDisabledOption = mapper == null && PropertyMappers.isDisabledMapper(cliKey);
+            Optional<PropertyMapper<?>> disabled = PropertyMappers.getKcKeyFromCliKey(cliKey).flatMap(PropertyMappers::getDisabledMapper);
+
             final BooleanSupplier isUnknownOption = () -> mapper == null || !(cmd.getCommand() instanceof AbstractCommand);
 
-            if (isDisabledOption) {
-                var enabledWhen = PropertyMappers.getDisabledMapper(cliKey)
-                        .map(PropertyMapper::getEnabledWhen)
-                        .filter(Optional::isPresent)
-                        .map(desc -> format(". %s", desc.get()))
+            if (mapper == null && disabled.isPresent()) {
+                var enabledWhen = disabled
+                        .flatMap(PropertyMapper::getEnabledWhen)
+                        .map(desc -> format(". %s", desc))
                         .orElse("");
 
                 errorMessage = format("Disabled option: '%s'%s", cliKey, enabledWhen);
@@ -70,6 +70,13 @@ public class ShortErrorMessageHandler implements IParameterExceptionHandler {
                     }
                 }
             }
+        } else if (ex instanceof MissingParameterException mpe) {
+            if (mpe.getMissing().size() == 1) {
+                ArgSpec spec = mpe.getMissing().get(0);
+                if (spec instanceof OptionSpec option) {
+                    errorMessage = getExpectedMessage(option);
+                }
+            }
         }
 
         writer.println(cmd.getColorScheme().errorText(errorMessage));
@@ -88,7 +95,7 @@ public class ShortErrorMessageHandler implements IParameterExceptionHandler {
         return getInvalidInputExitCode(ex, cmd);
     }
 
-    static int getInvalidInputExitCode(Exception ex, CommandLine cmd) {
+    static int getInvalidInputExitCode(Throwable ex, CommandLine cmd) {
         return cmd.getExitCodeExceptionMapper() != null
                 ? cmd.getExitCodeExceptionMapper().getExitCode(ex)
                 : cmd.getCommandSpec().exitCodeOnInvalidInput();
@@ -97,4 +104,29 @@ public class ShortErrorMessageHandler implements IParameterExceptionHandler {
     private String[] getUnmatchedPartsByOptionSeparator(UnmatchedArgumentException uae, String separator) {
         return uae.getUnmatched().get(0).split(separator);
     }
+
+    private String getExpectedMessage(OptionSpec option) {
+        return String.format("Option '%s' (%s) expects %s.%s", String.join(", ", option.names()), option.paramLabel(),
+                option.typeInfo().isMultiValue() ? "one or more comma separated values without whitespace": "a single value",
+                getExpectedValuesMessage(option.completionCandidates(), isCaseInsensitive(option)));
+    }
+
+    private boolean isCaseInsensitive(OptionSpec option) {
+        if (option.longestName().startsWith("--")) {
+            var mapper = PropertyMappers.getMapper(option.longestName().substring(2));
+            if (mapper != null) {
+                return mapper.getOption().isCaseInsensitiveExpectedValues();
+            }
+        }
+        return false;
+    }
+
+    public static String getExpectedValuesMessage(Iterable<String> specCandidates, boolean caseInsensitive) {
+        if (specCandidates == null || !specCandidates.iterator().hasNext()) {
+            return "";
+        }
+        return String.format(" Expected values are%s: %s", caseInsensitive ? " (case insensitive)" : "",
+                String.join(", ", specCandidates));
+    }
+
 }

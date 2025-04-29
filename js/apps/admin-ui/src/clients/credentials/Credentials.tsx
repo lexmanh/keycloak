@@ -2,6 +2,12 @@ import type { AuthenticationProviderRepresentation } from "@keycloak/keycloak-ad
 import type ClientRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientRepresentation";
 import type CredentialRepresentation from "@keycloak/keycloak-admin-client/lib/defs/credentialRepresentation";
 import {
+  HelpItem,
+  SelectControl,
+  useAlerts,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
+import {
   ActionGroup,
   Alert,
   AlertVariant,
@@ -10,20 +16,20 @@ import {
   CardBody,
   ClipboardCopy,
   Divider,
+  Form,
   FormGroup,
   PageSection,
   Split,
   SplitItem,
 } from "@patternfly/react-core";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { HelpItem, SelectControl } from "@keycloak/keycloak-ui-shared";
-import { adminClient } from "../../admin-client";
-import { useAlerts } from "../../components/alert/Alerts";
+import { useAdminClient } from "../../admin-client";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
+import { DynamicComponents } from "../../components/dynamic/DynamicComponents";
 import { FormAccess } from "../../components/form/FormAccess";
-import { useFetch } from "../../utils/useFetch";
+import { useServerInfo } from "../../context/server-info/ServerInfoProvider";
 import { FormFields } from "../ClientDetails";
 import { ClientSecret } from "./ClientSecret";
 import { SignedJWT } from "./SignedJWT";
@@ -40,6 +46,8 @@ export type CredentialsProps = {
 };
 
 export const Credentials = ({ client, save, refresh }: CredentialsProps) => {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
   const clientId = client.id!;
@@ -65,6 +73,15 @@ export const Credentials = ({ client, save, refresh }: CredentialsProps) => {
 
   const selectedProvider = providers.find(
     (provider) => provider.id === clientAuthenticatorType,
+  );
+
+  const { componentTypes } = useServerInfo();
+  const providerProperties = useMemo(
+    () =>
+      componentTypes?.["org.keycloak.authentication.ClientAuthenticator"]?.find(
+        (p) => p.id === clientAuthenticatorType,
+      )?.properties,
+    [clientAuthenticatorType, componentTypes],
   );
 
   useFetch(
@@ -165,6 +182,14 @@ export const Credentials = ({ client, save, refresh }: CredentialsProps) => {
               </FormGroup>
             )}
             {clientAuthenticatorType === "client-x509" && <X509 />}
+            {providerProperties && (
+              <Form>
+                <DynamicComponents
+                  properties={providerProperties}
+                  convertToName={(name) => `attributes.${name}`}
+                />
+              </Form>
+            )}
             <ActionGroup>
               <Button variant="primary" type="submit" isDisabled={!isDirty}>
                 {t("save")}

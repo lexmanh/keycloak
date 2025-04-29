@@ -66,7 +66,7 @@ The `AppServerTestEnricher` then ensures the corresponding server is started dur
 The app-servers with installed Keycloak adapter are prepared in `servers/app-server` submodules, activated by `-Papp-server-MODULE` or `-Dapp.server=MODULE`
 [More details.](servers/app-server/README.md)
 
-NOTE: Some corresponding adapter test modules are in `tests/other/adapters` submodules, and are activated by the same profiles. It will be tranferred into base testsuite.
+NOTE: Some corresponding adapter test modules are in `tests/other/adapters` submodules, and are activated by the same profiles. It will be transferred into base testsuite.
 
 ## SuiteContext and TestContext
 
@@ -160,8 +160,7 @@ integration-arquillian
 │  │  └──undertow (arq. extension)
 │  │
 │  ├──app-server
-│  │  ├──jboss (wildfly/eap/as)
-│  │  └──karaf
+│  │  └──jboss (wildfly/eap/as)
 │  │
 │  └──wildfly-balancer
 │
@@ -172,9 +171,7 @@ integration-arquillian
    └──other   (common settings for all test modules dependent on base)
       │
       ├──adapters         (common settings for all adapter test modules - will be moved into base)
-      │  ├──jboss
-      │  └──karaf
-      │
+      │  └──jboss
       ├──console          
       ├──console_no_users 
       └──...

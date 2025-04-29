@@ -19,12 +19,15 @@ package org.keycloak.authentication.authenticators.browser;
 
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
+import org.keycloak.authentication.AuthenticatorUtil;
 import org.keycloak.authentication.authenticators.util.AcrStore;
 import org.keycloak.authentication.authenticators.util.AuthenticatorUtils;
 import org.keycloak.models.Constants;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
+import org.keycloak.organization.protocol.mappers.oidc.OrganizationScope;
+import org.keycloak.organization.utils.Organizations;
 import org.keycloak.protocol.LoginProtocol;
 import org.keycloak.services.managers.AuthenticationManager;
 import org.keycloak.services.messages.Messages;
@@ -61,8 +64,11 @@ public class CookieAuthenticator implements Authenticator {
                 authSession.setAuthNote(AuthenticationManager.FORCED_REAUTHENTICATION, "true");
                 context.setForwardedInfoMessage(Messages.REAUTHENTICATE);
                 context.attempted();
+            } else if(AuthenticatorUtil.isForkedFlow(authSession)){
+                context.attempted();
             } else {
-                int previouslyAuthenticatedLevel = acrStore.getHighestAuthenticatedLevelFromPreviousAuthentication();
+                String topLevelFlowId = context.getTopLevelFlow().getId();
+                int previouslyAuthenticatedLevel = acrStore.getHighestAuthenticatedLevelFromPreviousAuthentication(topLevelFlowId);
                 AuthenticatorUtils.updateCompletedExecutions(context.getAuthenticationSession(), authResult.getSession(), context.getExecution().getId());
 
                 if (acrStore.getRequestedLevelOfAuthentication(context.getTopLevelFlow()) > previouslyAuthenticatedLevel) {
@@ -80,7 +86,13 @@ public class CookieAuthenticator implements Authenticator {
                     acrStore.setLevelAuthenticatedToCurrentRequest(previouslyAuthenticatedLevel);
                     authSession.setAuthNote(AuthenticationManager.SSO_AUTH, "true");
                     context.attachUserSession(authResult.getSession());
-                    context.success();
+
+                    if (isOrganizationContext(context)) {
+                        // if re-authenticating in the scope of an organization, an organization must be resolved prior to authenticating the user
+                        context.attempted();
+                    } else {
+                        context.success();
+                    }
                 }
             }
         }
@@ -104,5 +116,15 @@ public class CookieAuthenticator implements Authenticator {
     @Override
     public void close() {
 
+    }
+
+    private boolean isOrganizationContext(AuthenticationFlowContext context) {
+        KeycloakSession session = context.getSession();
+
+        if (Organizations.isEnabledAndOrganizationsPresent(session)) {
+            return OrganizationScope.valueOfScope(session) != null;
+        }
+
+        return false;
     }
 }

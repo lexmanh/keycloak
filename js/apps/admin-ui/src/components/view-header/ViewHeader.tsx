@@ -2,8 +2,11 @@ import {
   Badge,
   Button,
   Divider,
+  Dropdown,
+  DropdownList,
   Level,
   LevelItem,
+  MenuToggle,
   PageSection,
   Switch,
   Text,
@@ -12,11 +15,6 @@ import {
   ToolbarContent,
   ToolbarItem,
 } from "@patternfly/react-core";
-import {
-  Dropdown,
-  DropdownPosition,
-  DropdownToggle,
-} from "@patternfly/react-core/deprecated";
 import {
   ReactElement,
   ReactNode,
@@ -126,7 +124,7 @@ export const ViewHeader = ({
             <Toolbar className="pf-v5-u-p-0">
               <ToolbarContent>
                 {onToggle && (
-                  <ToolbarItem>
+                  <ToolbarItem alignSelf="center">
                     <Switch
                       id={`${toKey(titleKey)}-switch`}
                       data-testid={`${titleKey}-switch`}
@@ -151,20 +149,25 @@ export const ViewHeader = ({
                 {dropdownItems && (
                   <ToolbarItem>
                     <Dropdown
-                      position={DropdownPosition.right}
-                      toggle={
-                        <DropdownToggle
+                      popperProps={{
+                        position: "right",
+                      }}
+                      onOpenChange={onDropdownToggle}
+                      toggle={(ref) => (
+                        <MenuToggle
+                          ref={ref}
                           isDisabled={isDropdownDisabled}
                           id={actionsDropdownId}
-                          onToggle={onDropdownToggle}
+                          onClick={onDropdownToggle}
+                          data-testid="action-dropdown"
                         >
                           {t("action")}
-                        </DropdownToggle>
-                      }
+                        </MenuToggle>
+                      )}
                       isOpen={isDropdownOpen}
-                      dropdownItems={dropdownItems}
-                      data-testid="action-dropdown"
-                    />
+                    >
+                      <DropdownList>{dropdownItems}</DropdownList>
+                    </Dropdown>
                   </ToolbarItem>
                 )}
               </ToolbarContent>
@@ -193,18 +196,21 @@ export const ViewHeader = ({
         {lowerDropdownItems && (
           <Dropdown
             className="keycloak__user-federation__dropdown"
-            toggle={
-              <DropdownToggle
-                onToggle={() => onLowerDropdownToggle()}
-                toggleVariant="primary"
+            onOpenChange={onLowerDropdownToggle}
+            toggle={(ref) => (
+              <MenuToggle
+                ref={ref}
+                onClick={onLowerDropdownToggle}
+                variant="primary"
                 id="ufToggleId"
               >
                 {t(lowerDropdownMenuTitle)}
-              </DropdownToggle>
-            }
+              </MenuToggle>
+            )}
             isOpen={isLowerDropdownOpen}
-            dropdownItems={lowerDropdownItems}
-          />
+          >
+            <DropdownList>{lowerDropdownItems}</DropdownList>
+          </Dropdown>
         )}
         {lowerButton && (
           <Button

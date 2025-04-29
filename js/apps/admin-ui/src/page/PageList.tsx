@@ -1,6 +1,10 @@
 import ComponentRepresentation from "@keycloak/keycloak-admin-client/lib/defs/componentRepresentation";
-import type RealmRepresentation from "@keycloak/keycloak-admin-client/lib/defs/realmRepresentation";
 import type { ComponentQuery } from "@keycloak/keycloak-admin-client/lib/resources/components";
+import {
+  KeycloakDataTable,
+  ListEmptyState,
+  useAlerts,
+} from "@keycloak/keycloak-ui-shared";
 import {
   Button,
   ButtonVariant,
@@ -8,35 +12,38 @@ import {
   ToolbarItem,
 } from "@patternfly/react-core";
 import { IRowData } from "@patternfly/react-table";
+import { get } from "lodash-es";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { adminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAdminClient } from "../admin-client";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
-import { ListEmptyState } from "../components/list-empty-state/ListEmptyState";
-import { KeycloakDataTable } from "../components/table-toolbar/KeycloakDataTable";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { useServerInfo } from "../context/server-info/ServerInfoProvider";
-import { useFetch } from "../utils/useFetch";
-import { PageListParams, toDetailPage } from "./routes";
+import { PAGE_PROVIDER } from "./constants";
+import { addDetailPage, PageListParams, toDetailPage } from "./routes";
 
-export const PAGE_PROVIDER = "org.keycloak.services.ui.extend.UiPageProvider";
-export const TAB_PROVIDER = "org.keycloak.services.ui.extend.UiTabProvider";
+type DetailLinkProps = {
+  obj: ComponentRepresentation;
+  field: string;
+};
 
-const DetailLink = (obj: ComponentRepresentation) => {
+const DetailLink = ({ obj, field }: DetailLinkProps) => {
   const { realm } = useRealm();
+  const value = get(obj, field);
   return (
     <Link
-      key={obj.id}
+      key={value}
       to={toDetailPage({ realm, providerId: obj.providerId!, id: obj.id! })}
     >
-      {obj.id}
+      {value}
     </Link>
   );
 };
 export default function PageList() {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
   const navigate = useNavigate();
@@ -44,19 +51,12 @@ export default function PageList() {
   const [key, setKey] = useState(0);
   const refresh = () => setKey(key + 1);
 
-  const { realm: realmName } = useRealm();
-  const [realm, setRealm] = useState<RealmRepresentation>();
+  const { realm: realmName, realmRepresentation: realm } = useRealm();
   const [selectedItem, setSelectedItem] = useState<ComponentRepresentation>();
   const { componentTypes } = useServerInfo();
   const pages = componentTypes?.[PAGE_PROVIDER];
 
   const page = pages?.find((p) => p.id === providerId)!;
-
-  useFetch(
-    async () => adminClient.realms.findOne({ realm: realmName }),
-    setRealm,
-    [],
-  );
 
   const loader = async () => {
     const params: ComponentQuery = {
@@ -96,7 +96,7 @@ export default function PageList() {
               component={(props) => (
                 <Link
                   {...props}
-                  to={toDetailPage({ realm: realmName, providerId: page.id })}
+                  to={addDetailPage({ realm: realmName, providerId: page.id })}
                 />
               )}
             >
@@ -116,10 +116,18 @@ export default function PageList() {
         searchPlaceholderKey="searchItem"
         loader={loader}
         columns={[
-          { name: "id", cellRenderer: DetailLink },
-          ...page.properties.slice(0, 3).map((p) => ({
-            name: `config.${p.name}[0]`,
-            displayKey: p.label,
+          ...(
+            page.metadata.displayFields ||
+            page.properties.slice(0, 3).map((p) => p.name)
+          ).map((name: string, index: number) => ({
+            name: `config.${name}[0]`,
+            displayKey: page.properties.find((p) => p.name === name)!.label,
+            cellRenderer:
+              index === 0
+                ? (obj: ComponentRepresentation) => (
+                    <DetailLink obj={obj} field={`config.${name}`} />
+                  )
+                : undefined,
           })),
         ]}
         ariaLabelKey="list"
@@ -130,7 +138,7 @@ export default function PageList() {
             instructions={t("noItemsInstructions")}
             primaryActionText={t("createItem")}
             onPrimaryAction={() =>
-              navigate(toDetailPage({ realm: realmName, providerId: page.id }))
+              navigate(addDetailPage({ realm: realmName, providerId: page.id }))
             }
           />
         }

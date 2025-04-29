@@ -1,27 +1,26 @@
-import RealmRepresentation from "@keycloak/keycloak-admin-client/lib/defs/realmRepresentation";
-import { ActionGroup, Button, FormGroup } from "@patternfly/react-core";
+import { HelpItem, TextControl } from "@keycloak/keycloak-ui-shared";
 import {
+  ActionGroup,
+  Button,
+  FormGroup,
+  MenuToggle,
   Select,
+  SelectList,
   SelectOption,
-  SelectVariant,
-} from "@patternfly/react-core/deprecated";
+} from "@patternfly/react-core";
 import { useState } from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { FormAccess } from "../../components/form/FormAccess";
-import { HelpItem } from "@keycloak/keycloak-ui-shared";
 import { DefaultSwitchControl } from "../../components/SwitchControl";
-import { adminClient } from "../../admin-client";
+import { FormAccess } from "../../components/form/FormAccess";
 import { KeyValueInput } from "../../components/key-value-form/KeyValueInput";
 import { MultiLineInput } from "../../components/multi-line-input/MultiLineInput";
 import { TimeSelector } from "../../components/time-selector/TimeSelector";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import { convertAttributeNameToForm } from "../../util";
-import { useFetch } from "../../utils/useFetch";
+import useIsFeatureEnabled, { Feature } from "../../utils/useIsFeatureEnabled";
 import { FormFields } from "../ClientDetails";
 import { TokenLifespan } from "./TokenLifespan";
-
-import useIsFeatureEnabled, { Feature } from "../../utils/useIsFeatureEnabled";
 
 type AdvancedSettingsProps = {
   save: () => void;
@@ -39,17 +38,10 @@ export const AdvancedSettings = ({
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
-  const [realm, setRealm] = useState<RealmRepresentation>();
-  const { realm: realmName } = useRealm();
+  const { realmRepresentation: realm } = useRealm();
 
   const isFeatureEnabled = useIsFeatureEnabled();
   const isDPoPEnabled = isFeatureEnabled(Feature.DPoP);
-
-  useFetch(
-    () => adminClient.realms.findOne({ realm: realmName }),
-    setRealm,
-    [],
-  );
 
   const { control } = useFormContext();
   return (
@@ -119,6 +111,21 @@ export const AdvancedSettings = ({
             defaultValue={realm?.offlineSessionIdleTimeout}
             units={["minute", "day", "hour"]}
           />
+
+          {realm?.offlineSessionMaxLifespanEnabled && (
+            <TokenLifespan
+              id="clientOfflineSessionMax"
+              name={convertAttributeNameToForm(
+                "attributes.client.offline.session.max.lifespan",
+              )}
+              defaultValue={
+                realm?.offlineSessionMaxLifespanEnabled
+                  ? realm.offlineSessionMaxLifespan
+                  : undefined
+              }
+              units={["minute", "day", "hour"]}
+            />
+          )}
           <DefaultSwitchControl
             name={convertAttributeNameToForm<FormFields>(
               "attributes.tls.client.certificate.bound.access.tokens",
@@ -156,21 +163,31 @@ export const AdvancedSettings = ({
               control={control}
               render={({ field }) => (
                 <Select
-                  toggleId="keyForCodeExchange"
-                  variant={SelectVariant.single}
-                  onToggle={(_event, val) => setOpen(val)}
+                  toggle={(ref) => (
+                    <MenuToggle
+                      id="keyForCodeExchange"
+                      ref={ref}
+                      onClick={() => setOpen(!open)}
+                      isExpanded={open}
+                    >
+                      {[field.value || t("choose")]}
+                    </MenuToggle>
+                  )}
                   isOpen={open}
+                  onOpenChange={(isOpen) => setOpen(isOpen)}
                   onSelect={(_, value) => {
                     field.onChange(value);
                     setOpen(false);
                   }}
-                  selections={[field.value || t("choose")]}
+                  selected={field.value}
                 >
-                  {["", "S256", "plain"].map((v) => (
-                    <SelectOption key={v} value={v}>
-                      {v || t("choose")}
-                    </SelectOption>
-                  ))}
+                  <SelectList>
+                    {["", "S256", "plain"].map((v) => (
+                      <SelectOption key={v} value={v}>
+                        {v || t("choose")}
+                      </SelectOption>
+                    ))}
+                  </SelectList>
                 </Select>
               )}
             />
@@ -189,6 +206,15 @@ export const AdvancedSettings = ({
             )}
             label={t("lightweightAccessToken")}
             labelIcon={t("lightweightAccessTokenHelp")}
+            stringify
+          />
+
+          <DefaultSwitchControl
+            name={convertAttributeNameToForm<FormFields>(
+              "attributes.client.introspection.response.allow.jwt.claim.enabled",
+            )}
+            label={t("supportJwtClaimInIntrospectionResponse")}
+            labelIcon={t("supportJwtClaimInIntrospectionResponseHelp")}
             stringify
           />
           <FormGroup
@@ -223,6 +249,12 @@ export const AdvancedSettings = ({
               stringify
             />
           </FormGroup>
+          <TextControl
+            type="text"
+            name={convertAttributeNameToForm("attributes.minimum.acr.value")}
+            label={t("minimumACRValue")}
+            labelIcon={t("minimumACRValueHelp")}
+          />
         </>
       )}
       <ActionGroup>

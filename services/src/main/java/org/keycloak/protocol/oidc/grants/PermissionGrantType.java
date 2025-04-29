@@ -136,8 +136,10 @@ public class PermissionGrantType extends OAuth2GrantTypeBase {
         if (rpt != null) {
             AccessToken accessToken = session.tokens().decode(rpt, AccessToken.class);
             if (accessToken == null) {
+                String errorMessage = "RPT signature is invalid";
+                event.detail(Details.REASON, errorMessage);
                 event.error(Errors.INVALID_REQUEST);
-                throw new CorsErrorResponseException(cors, "invalid_rpt", "RPT signature is invalid", Response.Status.FORBIDDEN);
+                throw new CorsErrorResponseException(cors, "invalid_rpt", errorMessage, Response.Status.FORBIDDEN);
             }
 
             authorizationRequest.setRpt(accessToken);
@@ -156,12 +158,14 @@ public class PermissionGrantType extends OAuth2GrantTypeBase {
 
         // permissions have a format like RESOURCE#SCOPE1,SCOPE2
         List<String> permissions = formParams.get("permission");
+        String responsePermissionsLimit = formParams.getFirst("response_permissions_limit");
+        Integer maxResults = responsePermissionsLimit != null ? Integer.parseInt(responsePermissionsLimit) : null;
 
         if (permissions != null) {
             event.detail(Details.PERMISSION, String.join("|", permissions));
             String permissionResourceFormat = formParams.getFirst("permission_resource_format");
             boolean permissionResourceMatchingUri = Boolean.parseBoolean(formParams.getFirst("permission_resource_matching_uri"));
-            authorizationRequest.addPermissions(permissions, permissionResourceFormat, permissionResourceMatchingUri);
+            authorizationRequest.addPermissions(permissions, permissionResourceFormat, permissionResourceMatchingUri, maxResults);
         }
 
         AuthorizationRequest.Metadata metadata = new AuthorizationRequest.Metadata();
@@ -172,10 +176,8 @@ public class PermissionGrantType extends OAuth2GrantTypeBase {
             metadata.setIncludeResourceName(Boolean.parseBoolean(responseIncludeResourceName));
         }
 
-        String responsePermissionsLimit = formParams.getFirst("response_permissions_limit");
-
         if (responsePermissionsLimit != null) {
-            metadata.setLimit(Integer.parseInt(responsePermissionsLimit));
+            metadata.setLimit(maxResults);
         }
 
         metadata.setResponseMode(formParams.getFirst("response_mode"));

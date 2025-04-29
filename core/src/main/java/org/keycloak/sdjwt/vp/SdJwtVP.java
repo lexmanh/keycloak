@@ -18,6 +18,7 @@ package org.keycloak.sdjwt.vp;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -26,12 +27,18 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
+import org.keycloak.common.VerificationException;
 import org.keycloak.common.util.Base64Url;
+import org.keycloak.crypto.JavaAlgorithm;
 import org.keycloak.crypto.SignatureSignerContext;
+import org.keycloak.crypto.SignatureVerifierContext;
 import org.keycloak.sdjwt.IssuerSignedJWT;
+import org.keycloak.sdjwt.IssuerSignedJwtVerificationOpts;
 import org.keycloak.sdjwt.SdJwt;
 import org.keycloak.sdjwt.SdJwtUtils;
+import org.keycloak.sdjwt.SdJwtVerificationContext;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -41,7 +48,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * @author <a href="mailto:francis.pouatcha@adorsys.com">Francis Pouatcha</a>
  */
 public class SdJwtVP {
-    private String sdJwtVpString;
+    private final String sdJwtVpString;
     private final IssuerSignedJWT issuerSignedJWT;
 
     private final Map<String, ArrayNode> claims;
@@ -51,6 +58,11 @@ public class SdJwtVP {
     private final String hashAlgorithm;
 
     private final Optional<KeyBindingJWT> keyBindingJWT;
+    private final SdJwtVerificationContext sdJwtVerificationContext;
+
+    public Map<String, ArrayNode> getClaims() {
+        return claims;
+    }
 
     public IssuerSignedJWT getIssuerSignedJWT() {
         return issuerSignedJWT;
@@ -91,24 +103,45 @@ public class SdJwtVP {
         this.recursiveDigests = Collections.unmodifiableMap(recursiveDigests);
         this.ghostDigests = Collections.unmodifiableList(ghostDigests);
         this.keyBindingJWT = keyBindingJWT;
+
+        // Instantiate context for verification
+        this.sdJwtVerificationContext = new SdJwtVerificationContext(
+                this.sdJwtVpString,
+                this.issuerSignedJWT,
+                this.disclosures,
+                this.keyBindingJWT.orElse(null)
+        );
     }
 
     public static SdJwtVP of(String sdJwtString) {
         int disclosureStart = sdJwtString.indexOf(SdJwt.DELIMITER);
         int disclosureEnd = sdJwtString.lastIndexOf(SdJwt.DELIMITER);
 
+        if (disclosureStart == -1) {
+            throw new IllegalArgumentException("SD-JWT is malformed, expected to contain a '" + SdJwt.DELIMITER + "'");
+        }
+
         String issuerSignedJWTString = sdJwtString.substring(0, disclosureStart);
-        String disclosuresString = sdJwtString.substring(disclosureStart + 1, disclosureEnd);
+        String disclosuresString = "";
+
+        if (disclosureEnd > disclosureStart) {
+            disclosuresString = sdJwtString.substring(disclosureStart + 1, disclosureEnd);
+        }
 
         IssuerSignedJWT issuerSignedJWT = IssuerSignedJWT.fromJws(issuerSignedJWTString);
 
         ObjectNode issuerPayload = (ObjectNode) issuerSignedJWT.getPayload();
-        String hashAlgorithm = issuerPayload.get(IssuerSignedJWT.CLAIM_NAME_SD_HASH_ALGORITHM).asText();
+        String hashAlgorithm = Optional.ofNullable(issuerPayload.get(IssuerSignedJWT.CLAIM_NAME_SD_HASH_ALGORITHM))
+                .map(JsonNode::asText)
+                .orElse(JavaAlgorithm.SHA256.toLowerCase());
 
         Map<String, ArrayNode> claims = new HashMap<>();
         Map<String, String> disclosures = new HashMap<>();
 
-        String[] split = disclosuresString.split(SdJwt.DELIMITER);
+        List<String> split = Arrays.stream(disclosuresString.split(SdJwt.DELIMITER))
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+
         for (String disclosure : split) {
             String disclosureDigest = SdJwtUtils.hashAndBase64EncodeNoPad(disclosure.getBytes(), hashAlgorithm);
             if (disclosures.containsKey(disclosureDigest)) {
@@ -171,7 +204,7 @@ public class SdJwtVP {
     }
 
     public JsonNode getCnfClaim() {
-        return issuerSignedJWT.getPayload().get("cnf");
+        return issuerSignedJWT.getCnfClaim().orElse(null);
     }
 
     public String present(List<String> disclosureDigests, JsonNode keyBindingClaims,
@@ -195,11 +228,43 @@ public class SdJwtVP {
         String sd_hash = SdJwtUtils.hashAndBase64EncodeNoPad(unboundPresentation.getBytes(), getHashAlgorithm());
         keyBindingClaims = ((ObjectNode) keyBindingClaims).put("sd_hash", sd_hash);
         KeyBindingJWT keyBindingJWT = KeyBindingJWT.from(keyBindingClaims, holdSignatureSignerContext, jwsType);
-        sb.append(keyBindingJWT.getJwsString());
+        sb.append(keyBindingJWT.toJws());
         return sb.toString();
     }
 
-    // Recursively seraches the node with the given value.
+    /**
+     * Verifies SD-JWT presentation.
+     *
+     * @param issuerVerifyingKeys             Verifying keys for validating the Issuer-signed JWT. The caller
+     *                                        is responsible for establishing trust in that the keys belong
+     *                                        to the intended issuer.
+     * @param issuerSignedJwtVerificationOpts Options to parameterize the Issuer-Signed JWT verification.
+     * @param keyBindingJwtVerificationOpts   Options to parameterize the Key Binding JWT verification.
+     *                                        Must, among others, specify the Verifier's policy whether
+     *                                        to check Key Binding.
+     * @throws VerificationException if verification failed
+     */
+    public void verify(
+            List<SignatureVerifierContext> issuerVerifyingKeys,
+            IssuerSignedJwtVerificationOpts issuerSignedJwtVerificationOpts,
+            KeyBindingJwtVerificationOpts keyBindingJwtVerificationOpts
+    ) throws VerificationException {
+        sdJwtVerificationContext.verifyPresentation(
+                issuerVerifyingKeys,
+                issuerSignedJwtVerificationOpts,
+                keyBindingJwtVerificationOpts,
+                null
+        );
+    }
+
+    /**
+     * Retrieve verification context for advanced scenarios.
+     */
+    public SdJwtVerificationContext getSdJwtVerificationContext() {
+        return sdJwtVerificationContext;
+    }
+
+    // Recursively searches the node with the given value.
     // Returns the node if found, null otherwise.
     private static JsonNode findNode(JsonNode node, String value) {
         if (node == null) {

@@ -19,17 +19,21 @@
 
 package org.keycloak.testsuite.actions;
 
-import java.util.List;
-
+import jakarta.mail.internet.MimeMessage;
 import jakarta.ws.rs.core.Response;
+import java.util.List;
+import org.hamcrest.MatcherAssert;
+import org.hamcrest.Matchers;
 import org.jboss.arquillian.graphene.page.Page;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.keycloak.authentication.requiredactions.DeleteCredentialAction;
 import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
 import org.keycloak.events.EventType;
+import org.keycloak.events.email.EmailEventListenerProviderFactory;
 import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.models.credential.PasswordCredentialModel;
 import org.keycloak.models.utils.TimeBasedOTP;
@@ -41,12 +45,18 @@ import org.keycloak.testsuite.pages.DeleteCredentialPage;
 import org.keycloak.testsuite.pages.ErrorPage;
 import org.keycloak.testsuite.pages.LoginConfigTotpPage;
 import org.keycloak.testsuite.pages.LoginTotpPage;
+import org.keycloak.testsuite.updaters.RealmAttributeUpdater;
+import org.keycloak.testsuite.util.GreenMailRule;
+import org.keycloak.testsuite.util.MailUtils;
 import org.keycloak.testsuite.util.UserBuilder;
 
 /**
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
  */
 public class AppInitiatedActionDeleteCredentialTest extends AbstractAppInitiatedActionTest {
+
+    @Rule
+    public GreenMailRule greenMail = new GreenMailRule();
 
     @Override
     protected String getAiaAction() {
@@ -76,9 +86,11 @@ public class AppInitiatedActionDeleteCredentialTest extends AbstractAppInitiated
 
     @Before
     public void beforeTest() {
+        ApiUtil.removeUserByUsername(testRealm(), "test-user@localhost");
         UserRepresentation user = UserBuilder.create()
                 .username("john")
-                .email("john@email.cz")
+                .email("test-user@localhost")
+                .emailVerified(true)
                 .firstName("John")
                 .lastName("Bar")
                 .enabled(true)
@@ -91,41 +103,59 @@ public class AppInitiatedActionDeleteCredentialTest extends AbstractAppInitiated
     }
 
     @Test
-    public void removeTotpSuccess() throws Exception {
-        String credentialId = getCredentialIdByType(OTPCredentialModel.TYPE);
-        oauth.kcAction(getKcActionParamForDeleteCredential(credentialId));
+    public void removeOtpSuccess() throws Exception {
+        try (RealmAttributeUpdater updater = new RealmAttributeUpdater(testRealm())
+                .addEventsListener(EmailEventListenerProviderFactory.ID)
+                .update()) {
 
-        loginPasswordAndOtp();
+            String credentialId = getCredentialIdByType(OTPCredentialModel.TYPE);
+            loginPasswordAndOtp(getKcActionParamForDeleteCredential(credentialId));
 
-        deleteCredentialPage.assertCurrent();
-        deleteCredentialPage.assertCredentialInMessage(OTPCredentialModel.TYPE);
+            deleteCredentialPage.assertCurrent();
+            deleteCredentialPage.assertCredentialInMessage(OTPCredentialModel.TYPE);
 
-        deleteCredentialPage.confirm();
+            deleteCredentialPage.confirm();
 
-        appPage.assertCurrent();
-        assertKcActionStatus("success");
+            appPage.assertCurrent();
+            assertKcActionStatus("success");
 
-        Assert.assertNull(getCredentialIdByType(OTPCredentialModel.TYPE));
+            Assert.assertNull(getCredentialIdByType(OTPCredentialModel.TYPE));
 
-        events.expect(EventType.REMOVE_TOTP)
-                .user(userId)
-                .detail(Details.CREDENTIAL_TYPE, OTPCredentialModel.TYPE)
-                .detail(Details.CREDENTIAL_ID, credentialId)
-                .detail(Details.CUSTOM_REQUIRED_ACTION, DeleteCredentialAction.PROVIDER_ID)
-                .assertEvent();
+            events.expect(EventType.REMOVE_TOTP)
+                    .user(userId)
+                    .detail(Details.CREDENTIAL_TYPE, OTPCredentialModel.TYPE)
+                    .detail(Details.CREDENTIAL_ID, credentialId)
+                    .detail(Details.CUSTOM_REQUIRED_ACTION, DeleteCredentialAction.PROVIDER_ID)
+                    .assertEvent();
+            events.expect(EventType.REMOVE_CREDENTIAL)
+                    .user(userId)
+                    .detail(Details.CREDENTIAL_TYPE, OTPCredentialModel.TYPE)
+                    .detail(Details.CREDENTIAL_ID, credentialId)
+                    .detail(Details.CUSTOM_REQUIRED_ACTION, DeleteCredentialAction.PROVIDER_ID)
+                    .assertEvent();
+
+            MimeMessage[] receivedMessages = greenMail.getReceivedMessages();
+            Assert.assertEquals(2, receivedMessages.length);
+
+            Assert.assertEquals("Remove OTP", receivedMessages[0].getSubject());
+            Assert.assertEquals("Remove credential", receivedMessages[1].getSubject());
+            MatcherAssert.assertThat(MailUtils.getBody(receivedMessages[1]).getText(),
+                    Matchers.startsWith("Credential otp was removed from your account"));
+            MatcherAssert.assertThat(MailUtils.getBody(receivedMessages[1]).getHtml(),
+                    Matchers.containsString("Credential otp was removed from your account"));
+        }
     }
 
     @Test
-    public void removeTotpCancel() throws Exception {
+    public void removeOtpCancel() throws Exception {
         String credentialId = getCredentialIdByType(OTPCredentialModel.TYPE);
 
-        loginPasswordAndOtp();
+        loginPasswordAndOtp(null);
 
         appPage.assertCurrent();
         events.clear();
 
-        oauth.kcAction(getKcActionParamForDeleteCredential(credentialId));
-        oauth.openLoginForm();
+        oauth.loginForm().kcAction(getKcActionParamForDeleteCredential(credentialId)).open();
 
         // Cancel on the confirmation page
         deleteCredentialPage.assertCurrent();
@@ -140,13 +170,12 @@ public class AppInitiatedActionDeleteCredentialTest extends AbstractAppInitiated
     @Test
     public void removePasswordShouldFail() throws Exception {
         String credentialId = getCredentialIdByType(PasswordCredentialModel.TYPE);
-        loginPasswordAndOtp();
+        loginPasswordAndOtp(null);
 
         appPage.assertCurrent();
         events.clear();
 
-        oauth.kcAction(getKcActionParamForDeleteCredential(credentialId));
-        oauth.openLoginForm();
+        oauth.loginForm().kcAction(getKcActionParamForDeleteCredential(credentialId)).open();
 
         // Cancel on the confirmation page
         deleteCredentialPage.assertCurrent();
@@ -155,7 +184,7 @@ public class AppInitiatedActionDeleteCredentialTest extends AbstractAppInitiated
 
         errorPage.assertCurrent();
 
-        events.expect(EventType.CUSTOM_REQUIRED_ACTION)
+        events.expect(EventType.REMOVE_CREDENTIAL)
                 .user(userId)
                 .detail(Details.CREDENTIAL_TYPE, PasswordCredentialModel.TYPE)
                 .detail(Details.CREDENTIAL_ID, credentialId)
@@ -167,13 +196,12 @@ public class AppInitiatedActionDeleteCredentialTest extends AbstractAppInitiated
 
     @Test
     public void missingActionId() throws Exception {
-        loginPasswordAndOtp();
+        loginPasswordAndOtp(null);
 
         appPage.assertCurrent();
         events.clear();
 
-        oauth.kcAction(DeleteCredentialAction.PROVIDER_ID);
-        oauth.openLoginForm();
+        oauth.loginForm().kcAction(DeleteCredentialAction.PROVIDER_ID).open();
 
         events.expect(EventType.CUSTOM_REQUIRED_ACTION)
                 .user(userId)
@@ -185,13 +213,12 @@ public class AppInitiatedActionDeleteCredentialTest extends AbstractAppInitiated
 
     @Test
     public void incorrectId() throws Exception {
-        loginPasswordAndOtp();
+        loginPasswordAndOtp(null);
 
         appPage.assertCurrent();
         events.clear();
 
-        oauth.kcAction(getKcActionParamForDeleteCredential("incorrect"));
-        oauth.openLoginForm();
+        oauth.loginForm().kcAction(getKcActionParamForDeleteCredential("incorrect")).open();
 
         // Redirected to the application. Action will be ignored
         appPage.assertCurrent();
@@ -209,7 +236,7 @@ public class AppInitiatedActionDeleteCredentialTest extends AbstractAppInitiated
         user.setRequiredActions(List.of(DeleteCredentialAction.PROVIDER_ID));
         testRealm().users().get(userId).update(user);
 
-        loginPasswordAndOtp();
+        loginPasswordAndOtp(null);
         appPage.assertCurrent();
 
         events.expect(EventType.CUSTOM_REQUIRED_ACTION)
@@ -218,12 +245,11 @@ public class AppInitiatedActionDeleteCredentialTest extends AbstractAppInitiated
     }
 
     @Test
-    public void removeTotpCustomLabel() throws Exception {
+    public void removeOtpCustomLabel() throws Exception {
         String credentialId = getCredentialIdByType(OTPCredentialModel.TYPE);
         testRealm().users().get(userId).setCredentialUserLabel(credentialId, "custom-otp-authenticator");
 
-        oauth.kcAction(getKcActionParamForDeleteCredential(credentialId));
-        loginPasswordAndOtp();
+        loginPasswordAndOtp(getKcActionParamForDeleteCredential(credentialId));
 
         deleteCredentialPage.assertCurrent();
         deleteCredentialPage.assertCredentialInMessage("custom-otp-authenticator");
@@ -236,6 +262,13 @@ public class AppInitiatedActionDeleteCredentialTest extends AbstractAppInitiated
         Assert.assertNull(getCredentialIdByType(OTPCredentialModel.TYPE));
 
         events.expect(EventType.REMOVE_TOTP)
+                .user(userId)
+                .detail(Details.CREDENTIAL_TYPE, OTPCredentialModel.TYPE)
+                .detail(Details.CREDENTIAL_ID, credentialId)
+                .detail(Details.CREDENTIAL_USER_LABEL, "custom-otp-authenticator")
+                .detail(Details.CUSTOM_REQUIRED_ACTION, DeleteCredentialAction.PROVIDER_ID)
+                .assertEvent();
+        events.expect(EventType.REMOVE_CREDENTIAL)
                 .user(userId)
                 .detail(Details.CREDENTIAL_TYPE, OTPCredentialModel.TYPE)
                 .detail(Details.CREDENTIAL_ID, credentialId)
@@ -257,8 +290,8 @@ public class AppInitiatedActionDeleteCredentialTest extends AbstractAppInitiated
         return DeleteCredentialAction.PROVIDER_ID + ":" + credentialId;
     }
 
-    private void loginPasswordAndOtp() {
-        oauth.openLoginForm();
+    private void loginPasswordAndOtp(String kcAction) {
+        oauth.loginForm().kcAction(kcAction).open();
         loginPage.login("john", "password");
         loginTotpPage.assertCurrent();
         loginTotpPage.login(totp.generateTOTP("mySecret"));

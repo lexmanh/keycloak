@@ -3,6 +3,7 @@ package org.keycloak.testsuite.updaters;
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.representations.idm.RealmRepresentation;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
@@ -94,6 +95,28 @@ public class RealmAttributeUpdater extends ServerResourceUpdater<RealmAttributeU
         return this;
     }
 
+    public RealmAttributeUpdater setPermanentLockout(Boolean value) {
+        rep.setPermanentLockout(value);
+        return this;
+    }
+
+    public RealmAttributeUpdater setQuickLoginCheckMilliSeconds(Long value) {
+        rep.setQuickLoginCheckMilliSeconds(value);
+        return this;
+    }
+
+    public RealmAttributeUpdater setEventsListeners(List<String> eventListanets) {
+        rep.setEventsListeners(eventListanets);
+        return this;
+    }
+
+    public RealmAttributeUpdater addEventsListener(String value) {
+        List<String> list = new ArrayList<>(rep.getEventsListeners());
+        list.add(value);
+        rep.setEventsListeners(list);
+        return this;
+    }
+
     public RealmAttributeUpdater setDuplicateEmailsAllowed(Boolean value) {
         rep.setDuplicateEmailsAllowed(value);
         return this;
@@ -177,6 +200,21 @@ public class RealmAttributeUpdater extends ServerResourceUpdater<RealmAttributeU
 
     public RealmAttributeUpdater setBrowserSecurityHeader(String name, String value) {
         rep.getBrowserSecurityHeaders().put(name, value);
+        return this;
+    }
+
+    public RealmAttributeUpdater setOrganizationsEnabled(Boolean organizationsEnabled) {
+        rep.setOrganizationsEnabled(organizationsEnabled);
+        return this;
+    }
+
+    public RealmAttributeUpdater setRegistrationAllowed(Boolean registrationAllowed) {
+        rep.setRegistrationAllowed(registrationAllowed);
+        return this;
+    }
+
+    public RealmAttributeUpdater setAdminPermissionsEnabled(Boolean adminPermissionsEnabled) {
+        rep.setAdminPermissionsEnabled(adminPermissionsEnabled);
         return this;
     }
 }

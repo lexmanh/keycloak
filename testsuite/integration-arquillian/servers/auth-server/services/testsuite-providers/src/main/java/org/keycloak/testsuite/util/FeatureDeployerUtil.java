@@ -18,13 +18,6 @@
 
 package org.keycloak.testsuite.util;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
-
 import org.jboss.logging.Logger;
 import org.keycloak.Config;
 import org.keycloak.common.Profile;
@@ -36,6 +29,14 @@ import org.keycloak.provider.ProviderManager;
 import org.keycloak.provider.ProviderManagerRegistry;
 import org.keycloak.provider.Spi;
 import org.keycloak.services.DefaultKeycloakSession;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Used to dynamically reload EnvironmentDependentProviderFactories after some feature is enabled/disabled
@@ -72,7 +73,7 @@ public class FeatureDeployerUtil {
 
             KeycloakDeploymentInfo di = createDeploymentInfo(factories);
 
-            manager = new ProviderManager(di, FeatureDeployerUtil.class.getClassLoader());
+            manager = new ProviderManager(di, FeatureDeployerUtil.class.getClassLoader(), Collections.singleton(new TestsuiteProviderLoader(di)));
             deployersCache.put(feature, manager);
         }
         ProviderManagerRegistry.SINGLETON.deploy(manager);

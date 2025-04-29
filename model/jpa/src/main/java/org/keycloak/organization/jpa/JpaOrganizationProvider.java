@@ -17,36 +17,60 @@
 
 package org.keycloak.organization.jpa;
 
-import static org.keycloak.models.OrganizationModel.ORGANIZATION_ATTRIBUTE;
+import static org.keycloak.models.OrganizationModel.ORGANIZATION_DOMAIN_ATTRIBUTE;
+import static org.keycloak.models.UserModel.EMAIL;
+import static org.keycloak.models.UserModel.FIRST_NAME;
+import static org.keycloak.models.UserModel.LAST_NAME;
+import static org.keycloak.models.UserModel.USERNAME;
 import static org.keycloak.models.jpa.PaginationUtils.paginateQuery;
+import static org.keycloak.organization.utils.Organizations.isReadOnlyOrganizationMember;
 import static org.keycloak.utils.StreamsUtil.closing;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.TypedQuery;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.From;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import org.keycloak.connections.jpa.JpaConnectionProvider;
-import org.keycloak.models.FederatedIdentityModel;
 import org.keycloak.models.GroupModel;
+import org.keycloak.models.GroupModel.Type;
 import org.keycloak.models.GroupProvider;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.MembershipMetadata;
 import org.keycloak.models.ModelDuplicateException;
 import org.keycloak.models.ModelException;
 import org.keycloak.models.ModelValidationException;
-import org.keycloak.models.OrganizationDomainModel;
 import org.keycloak.models.OrganizationModel;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.UserProvider;
+import org.keycloak.models.jpa.entities.GroupAttributeEntity;
+import org.keycloak.models.jpa.entities.GroupEntity;
 import org.keycloak.models.jpa.entities.OrganizationDomainEntity;
 import org.keycloak.models.jpa.entities.OrganizationEntity;
+import org.keycloak.models.jpa.entities.UserEntity;
+import org.keycloak.models.jpa.entities.UserGroupMembershipEntity;
 import org.keycloak.models.utils.KeycloakModelUtils;
+import org.keycloak.models.utils.ReadOnlyUserModelDelegate;
 import org.keycloak.organization.OrganizationProvider;
+import org.keycloak.representations.idm.MembershipType;
+import org.keycloak.organization.utils.Organizations;
+import org.keycloak.storage.StorageId;
+import org.keycloak.utils.ReservedCharValidator;
 import org.keycloak.utils.StringUtil;
 
 public class JpaOrganizationProvider implements OrganizationProvider {
@@ -54,37 +78,56 @@ public class JpaOrganizationProvider implements OrganizationProvider {
     private final EntityManager em;
     private final GroupProvider groupProvider;
     private final UserProvider userProvider;
-    private final RealmModel realm;
+    private final KeycloakSession session;
 
     public JpaOrganizationProvider(KeycloakSession session) {
+        this.session = session;
         em = session.getProvider(JpaConnectionProvider.class).getEntityManager();
         groupProvider = session.groups();
         userProvider = session.users();
-        realm = session.getContext().getRealm();
-        if (realm == null) {
-            throw new IllegalArgumentException("Session not bound to a realm");
-        }
     }
 
     @Override
-    public OrganizationModel create(String name, Set<String> domains) {
+    public OrganizationModel create(String id, String name, String alias) {
         if (StringUtil.isBlank(name)) {
             throw new ModelValidationException("Name can not be null");
         }
 
-        GroupModel group = createOrganizationGroup(name);
+        if (StringUtil.isBlank(alias)) {
+            try {
+                ReservedCharValidator.validateNoSpace(name);
+            } catch (ReservedCharValidator.ReservedCharException e) {
+                throw new ModelValidationException("Name contains a reserved character and cannot be used as alias");
+            }
+            alias = name;
+        }
+
+        if (getByName(name) != null) {
+            throw new ModelDuplicateException("A organization with the same name already exists.");
+        }
+
+        if (getAllStream(Map.of(OrganizationModel.ALIAS, alias), -1, -1).findAny().isPresent()) {
+            throw new ModelDuplicateException("A organization with the same alias already exists");
+        }
+
         OrganizationEntity entity = new OrganizationEntity();
+        entity.setId(id != null ? id : KeycloakModelUtils.generateId());
+        entity.setRealmId(getRealm().getId());
+        OrganizationAdapter adapter = new OrganizationAdapter(session, getRealm(), entity, this);
 
-        entity.setId(KeycloakModelUtils.generateId());
-        entity.setGroupId(group.getId());
-        entity.setRealmId(realm.getId());
-        entity.setName(name);
+        try {
+            session.getContext().setOrganization(adapter);
+            GroupModel group = createOrganizationGroup(adapter.getId());
 
-        em.persist(entity);
+            adapter.setGroupId(group.getId());
+            adapter.setName(name);
+            adapter.setAlias(alias);
+            adapter.setEnabled(true);
 
-        OrganizationAdapter adapter = new OrganizationAdapter(realm, entity, this);
-
-        adapter.setDomains(domains.stream().map(OrganizationDomainModel::new).collect(Collectors.toSet()));
+            em.persist(adapter.getEntity());
+        } finally {
+            session.getContext().setOrganization(null);
+        }
 
         return adapter;
     }
@@ -93,15 +136,28 @@ public class JpaOrganizationProvider implements OrganizationProvider {
     public boolean remove(OrganizationModel organization) {
         OrganizationEntity entity = getEntity(organization.getId());
 
-        GroupModel group = getOrganizationGroup(organization);
+        try {
+            session.getContext().setOrganization(organization);
+            RealmModel realm = session.realms().getRealm(getRealm().getId());
 
-        //TODO: won't scale, requires a better mechanism for bulk deleting users
-        userProvider.getGroupMembersStream(realm, group).forEach(userModel -> removeMember(organization, userModel));
-        groupProvider.removeGroup(realm, group);
+            // check if the realm is being removed so that we don't need to remove manually remove any other data but the org
+            if (realm != null) {
+                GroupModel group = getOrganizationGroup(entity);
 
-        realm.removeIdentityProviderByAlias(entity.getIdpAlias());
+                if (group != null) {
+                    OrganizationProvider provider = session.getProvider(OrganizationProvider.class);
+                    //TODO: won't scale, requires a better mechanism for bulk deleting users
+                    userProvider.getGroupMembersStream(realm, group).forEach(userModel -> provider.removeMember(organization, userModel));
+                    groupProvider.removeGroup(realm, group);
+                }
 
-        em.remove(entity);
+                organization.getIdentityProviders().forEach((model) -> removeIdentityProvider(organization, model));
+            }
+
+            em.remove(entity);
+        } finally {
+            session.getContext().setOrganization(null);
+        }
 
         return true;
     }
@@ -113,23 +169,45 @@ public class JpaOrganizationProvider implements OrganizationProvider {
     }
 
     @Override
+    public boolean addManagedMember(OrganizationModel organization, UserModel user) {
+        return addMember(organization, user, new MembershipMetadata(MembershipType.MANAGED));
+    }
+
+    @Override
     public boolean addMember(OrganizationModel organization, UserModel user) {
+        return addMember(organization, user, new MembershipMetadata(MembershipType.UNMANAGED));
+    }
+
+    private boolean addMember(OrganizationModel organization, UserModel user, MembershipMetadata metadata) {
         throwExceptionIfObjectIsNull(organization, "Organization");
         throwExceptionIfObjectIsNull(user, "User");
 
         OrganizationEntity entity = getEntity(organization.getId());
-        GroupModel group = groupProvider.getGroupById(realm, entity.getGroupId());
+        OrganizationModel current = Organizations.resolveOrganization(session);
 
-        if (user.isMemberOf(group)) {
+        // check the user and the organization belongs to the same realm
+        if (session.users().getUserById(session.realms().getRealm(entity.getRealmId()), user.getId()) == null) {
             return false;
         }
 
-        if (user.getFirstAttribute(ORGANIZATION_ATTRIBUTE) != null) {
-            throw new ModelException("User [" + user.getId() + "] is a member of a different organization");
+        if (current == null) {
+            session.getContext().setOrganization(organization);
         }
 
-        user.joinGroup(group);
-        user.setSingleAttribute(ORGANIZATION_ATTRIBUTE, entity.getId());
+        try {
+            GroupModel group = getOrganizationGroup(entity);
+
+            if (user.isMemberOf(group)) {
+                return false;
+            }
+
+            user.joinGroup(group, metadata);
+            OrganizationModel.OrganizationMemberJoinEvent.fire(organization, user, session);
+        } finally {
+            if (current == null) {
+                session.getContext().setOrganization(null);
+            }
+        }
 
         return true;
     }
@@ -137,16 +215,18 @@ public class JpaOrganizationProvider implements OrganizationProvider {
     @Override
     public OrganizationModel getById(String id) {
         OrganizationEntity entity = getEntity(id, false);
-        return entity == null ? null : new OrganizationAdapter(realm, entity, this);
+        return entity == null ? null : new OrganizationAdapter(session, getRealm(), entity, this);
     }
 
     @Override
     public OrganizationModel getByDomainName(String domain) {
-        TypedQuery<OrganizationDomainEntity> query = em.createNamedQuery("getByName", OrganizationDomainEntity.class);
+        TypedQuery<OrganizationEntity> query = em.createNamedQuery("getByDomainName", OrganizationEntity.class);
+        RealmModel realm = getRealm();
+        query.setParameter("realmId", realm.getId());
         query.setParameter("name", domain.toLowerCase());
         try {
-            OrganizationDomainEntity entity = query.getSingleResult();
-            return new OrganizationAdapter(realm, entity.getOrganization(), this);
+            OrganizationEntity entity = query.getSingleResult();
+            return new OrganizationAdapter(session, realm, entity, this);
         } catch (NoResultException nre) {
             return null;
         }
@@ -154,42 +234,215 @@ public class JpaOrganizationProvider implements OrganizationProvider {
 
     @Override
     public Stream<OrganizationModel> getAllStream(String search, Boolean exact, Integer first, Integer max) {
-        TypedQuery<OrganizationEntity> query;
-        if (StringUtil.isBlank(search)) {
-            query = em.createNamedQuery("getByRealm", OrganizationEntity.class);
-        } else if (Boolean.TRUE.equals(exact)) {
-            query = em.createNamedQuery("getByNameOrDomain", OrganizationEntity.class);
-            query.setParameter("search", search);
-        } else {
-            query = em.createNamedQuery("getByNameOrDomainContained", OrganizationEntity.class);
-            query.setParameter("search", search.toLowerCase());
-        }
-        query.setParameter("realmId", realm.getId());
+        CriteriaBuilder builder = em.getCriteriaBuilder();
+        CriteriaQuery<OrganizationEntity> query = builder.createQuery(OrganizationEntity.class);
+        Root<OrganizationEntity> org = query.from(OrganizationEntity.class);
 
-        return closing(paginateQuery(query, first, max).getResultStream()
-                .map(entity -> new OrganizationAdapter(realm, entity, this)));
+        Predicate predicate = buildStringSearchPredicate(builder, query, org, search, exact);
+
+        TypedQuery<OrganizationEntity> typedQuery = buildSearchQuery(builder, query, org, predicate);
+
+        return closing(paginateQuery(typedQuery, first, max).getResultStream()
+                .map(entity -> new OrganizationAdapter(session, getRealm(), entity, this)));
+    }
+
+    @Override
+    public Stream<OrganizationModel> getAllStream(Map<String, String> attributes, Integer first, Integer max) {
+        CriteriaBuilder builder = em.getCriteriaBuilder();
+        CriteriaQuery<OrganizationEntity> query = builder.createQuery(OrganizationEntity.class);
+        Root<OrganizationEntity> org = query.from(OrganizationEntity.class);
+
+        Predicate predicate = buildAttributeSearchPredicate(builder, query, org, attributes);
+
+
+        TypedQuery<OrganizationEntity> typedQuery = buildSearchQuery(builder, query, org, predicate);
+        return closing(paginateQuery(typedQuery, first, max).getResultStream())
+                .map(entity -> new OrganizationAdapter(session, getRealm(), entity, this));
+    }
+
+    @Override
+    public long count(String search, Boolean exact) {
+        CriteriaBuilder builder = em.getCriteriaBuilder();
+        CriteriaQuery<Long> query = builder.createQuery(Long.class);
+        Root<OrganizationEntity> org = query.from(OrganizationEntity.class);
+
+        Predicate predicate = buildStringSearchPredicate(builder, query, org, search, exact);
+
+        TypedQuery<Long> typedQuery = buildCountQuery(builder, query, org, predicate);
+
+        return typedQuery.getSingleResult();
+    }
+
+    @Override
+    public long count(Map<String, String> attributes) {
+        CriteriaBuilder builder = em.getCriteriaBuilder();
+        CriteriaQuery<Long> query = builder.createQuery(Long.class);
+        Root<OrganizationEntity> org = query.from(OrganizationEntity.class);
+
+        Predicate predicate = buildAttributeSearchPredicate(builder, query, org, attributes);
+
+
+        TypedQuery<Long> typedQuery = buildCountQuery(builder, query, org, predicate);
+
+        return typedQuery.getSingleResult();
+    }
+
+    private TypedQuery<OrganizationEntity> buildSearchQuery(CriteriaBuilder builder,
+                                                            CriteriaQuery<OrganizationEntity> query,
+                                                            Root<OrganizationEntity> org,
+                                                            Predicate predicate) {
+        return em.createQuery(
+                query.select(org).distinct(true).where(predicate).orderBy(builder.asc(org.get("name"))));
+    }
+
+    private TypedQuery<Long> buildCountQuery(CriteriaBuilder builder, CriteriaQuery<Long> query,
+                                             Root<OrganizationEntity> org, Predicate predicate) {
+        return em.createQuery(query.select(builder.countDistinct(org)).where(predicate));
+    }
+
+    private Predicate buildStringSearchPredicate(CriteriaBuilder builder, CriteriaQuery<?> query, Root<OrganizationEntity> org, String search,
+                                                 Boolean exact) {
+        Root<OrganizationDomainEntity> domain = query.from(OrganizationDomainEntity.class);
+
+        List<Predicate> predicates = new ArrayList<>();
+        RealmModel realm = getRealm();
+        predicates.add(builder.equal(org.get("realmId"), realm.getId()));
+        predicates.add(builder.equal(org.get("id"), domain.get("organization").get("id")));
+
+        Predicate namePredicate;
+        Predicate domainPredicate;
+        if (StringUtil.isBlank(search)) {
+            namePredicate = builder.conjunction();  // constant true
+            domainPredicate = builder.conjunction();
+
+        } else if (Boolean.TRUE.equals(exact)) {
+            namePredicate = builder.equal(org.get("name"), search);
+            domainPredicate = builder.equal(domain.get("name"), search);
+        } else {
+            namePredicate = builder.like(builder.lower(org.get("name")), "%" + search.toLowerCase() + "%");
+            domainPredicate = builder.like(domain.get("name"), "%" + search.toLowerCase() + "%");
+        }
+        predicates.add(builder.or(namePredicate, domainPredicate));
+
+        return builder.and(predicates.toArray(new Predicate[0]));
+    }
+
+    private Predicate buildAttributeSearchPredicate(CriteriaBuilder builder, CriteriaQuery<?> query,
+                                                    Root<OrganizationEntity> org, Map<String, String> attributes) {
+        Root<GroupEntity> group = query.from(GroupEntity.class);
+
+        List<Predicate> predicates = new ArrayList<>();
+        RealmModel realm = getRealm();
+        predicates.add(builder.equal(org.get("realmId"), realm.getId()));
+        predicates.add(builder.equal(org.get("groupId"), group.get("id")));
+
+        for (Map.Entry<String, String> entry : attributes.entrySet()) {
+            if (StringUtil.isBlank(entry.getKey())) {
+                continue;
+            }
+
+            if (OrganizationModel.ALIAS.equals(entry.getKey())) {
+                predicates.add(builder.equal(org.get("alias"), entry.getValue()));
+            } else {
+                Join<GroupEntity, GroupAttributeEntity> groupJoin = group.join("attributes");
+                Predicate attrNamePredicate = builder.equal(groupJoin.get("name"), entry.getKey());
+                Predicate attrValuePredicate = builder.equal(groupJoin.get("value"), entry.getValue());
+                predicates.add(builder.and(attrNamePredicate, attrValuePredicate));
+            }
+        }
+
+        builder.count(builder.and(predicates.toArray(new Predicate[0])));
+        return builder.and(predicates.toArray(new Predicate[0]));
     }
 
     @Override
     public Stream<UserModel> getMembersStream(OrganizationModel organization, String search, Boolean exact, Integer first, Integer max) {
-        throwExceptionIfObjectIsNull(organization, "Organization");
-        GroupModel group = getOrganizationGroup(organization);
+        return getMembersStream(organization, Map.of(UserModel.SEARCH, search), exact, first, max);
+    }
 
-        return userProvider.getGroupMembersStream(realm, group, search, exact, first, max);
+    @Override
+    public Stream<UserModel> getMembersStream(OrganizationModel organization, Map<String, String> filters, Boolean exact, Integer first, Integer max) {
+        throwExceptionIfObjectIsNull(organization, "Organization");
+        var builder = em.getCriteriaBuilder();
+        var queryBuilder = builder.createQuery(String.class);
+        var groupMembership = queryBuilder.from(UserGroupMembershipEntity.class);
+
+        queryBuilder.select(groupMembership.get("user").get("id"));
+
+        var predicates = new ArrayList<>();
+        var group = getOrganizationGroup(organization);
+
+        predicates.add(builder.equal(groupMembership.get("groupId"), group.getId()));
+
+        From<UserGroupMembershipEntity, UserEntity> userJoin = groupMembership.join("user");
+
+        for (Entry<String, String> filter : Optional.ofNullable(filters).orElse(Map.of()).entrySet()) {
+            switch (filter.getKey()) {
+                case UserModel.SEARCH -> predicates.add(builder
+                        .or(getSearchOptionPredicateArray(filter.getValue(), Optional.ofNullable(exact).orElse(false), builder, userJoin)));
+                case MembershipType.NAME -> predicates.add(builder
+                        .equal(groupMembership.get(MembershipType.NAME), filter.getValue().toUpperCase()));
+            }
+        }
+
+        queryBuilder.where(predicates.toArray(new Predicate[0]));
+        queryBuilder.orderBy(builder.asc(userJoin.get(USERNAME)));
+
+        return closing(paginateQuery(em.createQuery(queryBuilder), first, max).getResultStream().map(id -> {
+            UserModel user = userProvider.getUserById(getRealm(), id);
+
+            if (isReadOnlyOrganizationMember(session, user)) {
+                return new ReadOnlyUserModelDelegate(user) {
+                    @Override
+                    public boolean isEnabled() {
+                        return false;
+                    }
+                };
+            }
+
+            return user;
+        }));
+    }
+
+    private Predicate[] getSearchOptionPredicateArray(String value, boolean exact, CriteriaBuilder builder, From<?, UserEntity> from) {
+        value = value.toLowerCase();
+
+        List<Predicate> orPredicates = new ArrayList<>();
+
+        if (exact) {
+            orPredicates.add(builder.equal(from.get(USERNAME), value));
+            orPredicates.add(builder.equal(from.get(EMAIL), value));
+            orPredicates.add(builder.equal(builder.lower(from.get(FIRST_NAME)), value));
+            orPredicates.add(builder.equal(builder.lower(from.get(LAST_NAME)), value));
+        } else {
+            value = "%" + value + "%";
+            orPredicates.add(builder.like(from.get(USERNAME), value));
+            orPredicates.add(builder.like(from.get(EMAIL), value));
+            orPredicates.add(builder.like(builder.lower(from.get(FIRST_NAME)), value));
+            orPredicates.add(builder.like(builder.lower(from.get(LAST_NAME)), value));
+        }
+
+        return orPredicates.toArray(Predicate[]::new);
+    }
+
+    @Override
+    public long getMembersCount(OrganizationModel organization) {
+        throwExceptionIfObjectIsNull(organization, "Organization");
+        String groupId = getOrganizationGroup(organization).getId();
+
+        return userProvider.getUsersCount(getRealm(), Set.of(groupId));
     }
 
     @Override
     public UserModel getMemberById(OrganizationModel organization, String id) {
         throwExceptionIfObjectIsNull(organization, "Organization");
-        UserModel user = userProvider.getUserById(realm, id);
+        UserModel user = userProvider.getUserById(getRealm(), id);
 
         if (user == null) {
             return null;
         }
 
-        String orgId = user.getFirstAttribute(ORGANIZATION_ATTRIBUTE);
-
-        if (organization.getId().equals(orgId)) {
+        if (getByMember(user).anyMatch(organization::equals)) {
             return user;
         }
 
@@ -197,16 +450,25 @@ public class JpaOrganizationProvider implements OrganizationProvider {
     }
 
     @Override
-    public OrganizationModel getByMember(UserModel member) {
+    public Stream<OrganizationModel> getByMember(UserModel member) {
         throwExceptionIfObjectIsNull(member, "User");
 
-        String orgId = member.getFirstAttribute(ORGANIZATION_ATTRIBUTE);
-
-        if (orgId == null) {
-            return null;
+        TypedQuery<String> query;
+        if(StorageId.isLocalStorage(member.getId())) {
+            query = em.createNamedQuery("getGroupsByMember", String.class);
+        } else {
+            query = em.createNamedQuery("getGroupsByFederatedMember", String.class);
         }
 
-        return getById(orgId);
+        query.setParameter("userId", member.getId());
+
+        OrganizationProvider organizations = session.getProvider(OrganizationProvider.class);
+        GroupProvider groups = session.groups();
+
+        return closing(query.getResultStream())
+                .map((id) -> groups.getGroupById(getRealm(), id))
+                .map((g) -> organizations.getById(g.getName()))
+                .filter(Objects::nonNull);
     }
 
     @Override
@@ -215,29 +477,51 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         throwExceptionIfObjectIsNull(identityProvider, "Identity provider");
 
         OrganizationEntity organizationEntity = getEntity(organization.getId());
-        organizationEntity.setIdpAlias(identityProvider.getAlias());
-        identityProvider.getConfig().put(ORGANIZATION_ATTRIBUTE, organization.getId());
-        realm.updateIdentityProvider(identityProvider);
+
+        // check the identity provider and the organization belongs to the same realm
+        if (!checkOrgIdpAndRealm(organizationEntity, identityProvider)) {
+            return false;
+        }
+
+        String orgId = identityProvider.getOrganizationId();
+
+        if (organizationEntity.getId().equals(orgId)) {
+            return false;
+        } else if (orgId != null) {
+            throw new ModelValidationException("Identity provider already associated with a different organization");
+        }
+
+        identityProvider.setOrganizationId(organizationEntity.getId());
+        session.identityProviders().update(identityProvider);
 
         return true;
     }
 
     @Override
-    public IdentityProviderModel getIdentityProvider(OrganizationModel organization) {
+    public Stream<IdentityProviderModel> getIdentityProviders(OrganizationModel organization) {
         throwExceptionIfObjectIsNull(organization, "Organization");
         throwExceptionIfObjectIsNull(organization.getId(), "Organization ID");
 
         OrganizationEntity organizationEntity = getEntity(organization.getId());
-        // realm and its IDPs are cached
-        return realm.getIdentityProviderByAlias(organizationEntity.getIdpAlias());
+
+        return session.identityProviders().getByOrganization(organizationEntity.getId(), null, null);
     }
 
     @Override
-    public boolean removeIdentityProvider(OrganizationModel organization) {
+    public boolean removeIdentityProvider(OrganizationModel organization, IdentityProviderModel identityProvider) {
         throwExceptionIfObjectIsNull(organization, "Organization");
 
         OrganizationEntity organizationEntity = getEntity(organization.getId());
-        organizationEntity.setIdpAlias(null);
+
+        if (!organizationEntity.getId().equals(identityProvider.getOrganizationId())) {
+            return false;
+        }
+
+        // clear the organization id and any domain assigned to the IDP.
+        identityProvider.setOrganizationId(null);
+        identityProvider.getConfig().remove(ORGANIZATION_DOMAIN_ATTRIBUTE);
+        session.identityProviders().update(identityProvider);
+
         return true;
     }
 
@@ -249,15 +533,23 @@ public class JpaOrganizationProvider implements OrganizationProvider {
             return false;
         }
 
-        IdentityProviderModel identityProvider = organization.getIdentityProvider();
-
-        if (identityProvider == null) {
+        UserEntity userEntity = em.find(UserEntity.class, member.getId());
+        if (userEntity == null) {
             return false;
         }
 
-        FederatedIdentityModel federatedIdentity = userProvider.getFederatedIdentity(realm, member, identityProvider.getAlias());
+        GroupModel organizationGroup = getOrganizationGroup(organization);
+        try {
+            UserGroupMembershipEntity membership = em.createNamedQuery("userMemberOf", UserGroupMembershipEntity.class)
+                    .setParameter("user", userEntity)
+                    .setParameter("groupId", organizationGroup.getId())
+                    .getSingleResult();
+            em.detach(membership);
 
-        return federatedIdentity != null;
+            return MembershipType.MANAGED.equals(membership.getMembershipType());
+        } catch (NoResultException e) {
+            return false;
+        }
     }
 
     @Override
@@ -265,27 +557,47 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         throwExceptionIfObjectIsNull(organization, "organization");
         throwExceptionIfObjectIsNull(member, "member");
 
-        OrganizationModel userOrg = getByMember(member);
+        OrganizationModel userOrg = getByMember(member).filter(organization::equals).findAny().orElse(null);
 
         if (userOrg == null || !userOrg.equals(organization)) {
             return false;
         }
 
         if (isManagedMember(organization, member)) {
-            userProvider.removeUser(realm, member);
+            userProvider.removeUser(getRealm(), member);
         } else {
-            List<String> organizations = member.getAttributes().get(ORGANIZATION_ATTRIBUTE);
-            organizations.remove(organization.getId());
-            member.setAttribute(ORGANIZATION_ATTRIBUTE, organizations);
-            member.leaveGroup(getOrganizationGroup(organization));
+            OrganizationModel current = Organizations.resolveOrganization(session);
+
+            if (current == null) {
+                session.getContext().setOrganization(organization);
+            }
+
+            try {
+                member.leaveGroup(getOrganizationGroup(organization));
+            } finally {
+                if (current == null) {
+                    session.getContext().setOrganization(null);
+                }
+            }
         }
+
+        OrganizationModel.OrganizationMemberLeaveEvent.fire(organization, member, session);
 
         return true;
     }
 
     @Override
+    public long count() {
+        TypedQuery<Long> query;
+        query = em.createNamedQuery("getCount", Long.class);
+        query.setParameter("realmId", getRealm().getId());
+
+        return query.getSingleResult();
+    }
+
+    @Override
     public boolean isEnabled() {
-        return getAllStream().findAny().isPresent();
+        return getRealm().isOrganizationsEnabled();
     }
 
     @Override
@@ -309,35 +621,22 @@ public class JpaOrganizationProvider implements OrganizationProvider {
             return null;
         }
 
+        RealmModel realm = getRealm();
         if (!realm.getId().equals(entity.getRealmId())) {
-            throw new ModelException("Organization [" + entity.getId() + " does not belong to realm [" + realm.getId() + "]");
+            throw new ModelException("Organization [" + entity.getId() + "] does not belong to realm [" + realm.getId() + "]");
         }
 
         return entity;
     }
- 
-    private GroupModel createOrganizationGroup(String name) {
-        throwExceptionIfObjectIsNull(name, "Name of the group");
 
-        String groupName = getCanonicalGroupName(name);
-        GroupModel group = groupProvider.getGroupByName(realm, null, name);
-
-        if (group != null) {
-            throw new ModelDuplicateException("A group with the same name already exist and it is bound to different organization");
-        }
-
-        return groupProvider.createGroup(realm, groupName);
-    }
-
-    private String getCanonicalGroupName(String name) {
-        return "kc.org." + name;
+    private GroupModel createOrganizationGroup(String orgId) {
+        return groupProvider.createGroup(getRealm(), null, Type.ORGANIZATION, orgId, null);
     }
 
     private GroupModel getOrganizationGroup(OrganizationModel organization) {
         throwExceptionIfObjectIsNull(organization, "Organization");
         OrganizationEntity entity = getEntity(organization.getId());
-
-        GroupModel group = groupProvider.getGroupById(realm, entity.getGroupId());
+        GroupModel group = getOrganizationGroup(entity);
 
         if (group == null) {
             throw new ModelException("Organization group " + entity.getGroupId() + " not found");
@@ -346,9 +645,40 @@ public class JpaOrganizationProvider implements OrganizationProvider {
         return group;
     }
 
+    private GroupModel getOrganizationGroup(OrganizationEntity entity) {
+        return groupProvider.getGroupById(getRealm(), entity.getGroupId());
+    }
+
     private void throwExceptionIfObjectIsNull(Object object, String objectName) {
         if (object == null) {
             throw new ModelException(String.format("%s cannot be null", objectName));
         }
+    }
+
+    private OrganizationEntity getByName(String name) {
+        TypedQuery<OrganizationEntity> query = em.createNamedQuery("getByOrgName", OrganizationEntity.class);
+
+        query.setParameter("name", name);
+        query.setParameter("realmId", getRealm().getId());
+
+        try {
+            return query.getSingleResult();
+        } catch (NoResultException nre) {
+            return null;
+        }
+    }
+
+    // return true only if the organization realm and the identity provider realm is the same
+    private boolean checkOrgIdpAndRealm(OrganizationEntity orgEntity, IdentityProviderModel idp) {
+        IdentityProviderModel orgIdpByAlias = session.identityProviders().getByAlias(idp.getAlias());
+        return orgIdpByAlias != null && orgIdpByAlias.getInternalId().equals(idp.getInternalId());
+    }
+
+    private RealmModel getRealm() {
+        RealmModel realm = session.getContext().getRealm();
+        if (realm == null) {
+            throw new IllegalArgumentException("Session not bound to a realm");
+        }
+        return realm;
     }
 }

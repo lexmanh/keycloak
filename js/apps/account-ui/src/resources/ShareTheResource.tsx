@@ -1,4 +1,9 @@
 import {
+  FormErrorText,
+  SelectControl,
+  useEnvironment,
+} from "@keycloak/keycloak-ui-shared";
+import {
   Button,
   Chip,
   ChipGroup,
@@ -18,14 +23,10 @@ import {
   useWatch,
 } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import {
-  FormErrorText,
-  SelectControl,
-  useAlerts,
-} from "@keycloak/keycloak-ui-shared";
+
 import { updateRequest } from "../api";
 import { Permission, Resource } from "../api/representations";
-import { useEnvironment } from "../root/KeycloakContext";
+import { useAccountAlerts } from "../utils/useAccountAlerts";
 import { SharedWith } from "./SharedWith";
 
 type ShareTheResourceProps = {
@@ -48,7 +49,7 @@ export const ShareTheResource = ({
 }: ShareTheResourceProps) => {
   const { t } = useTranslation();
   const context = useEnvironment();
-  const { addAlert, addError } = useAlerts();
+  const { addAlert, addError } = useAccountAlerts();
   const form = useForm<FormValues>();
   const {
     control,
@@ -92,7 +93,7 @@ export const ShareTheResource = ({
       addAlert(t("shareSuccess"));
       onClose();
     } catch (error) {
-      addError(t("shareError", { error }).toString());
+      addError("shareError", error);
     }
     reset({});
   };
@@ -176,7 +177,7 @@ export const ShareTheResource = ({
             </InputGroupItem>
           </InputGroup>
           {fields.length > 1 && (
-            <ChipGroup categoryName={t("shareWith")}>
+            <ChipGroup categoryName={t("shareWith") + " "}>
               {fields.map(
                 (field, index) =>
                   index !== fields.length - 1 && (
@@ -192,10 +193,14 @@ export const ShareTheResource = ({
           )}
         </FormGroup>
         <FormProvider {...form}>
-          <FormGroup label="" fieldId="permissions-selected">
+          <FormGroup
+            label=""
+            fieldId="permissions-selected"
+            data-testid="permissions"
+          >
             <SelectControl
               name="permissions"
-              variant="typeaheadmulti"
+              variant="typeaheadMulti"
               controller={{ defaultValue: [] }}
               options={resource.scopes.map(({ name, displayName }) => ({
                 key: name,

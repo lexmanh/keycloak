@@ -13,9 +13,8 @@ import { capitalize } from "lodash-es";
 import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { TextControl } from "@keycloak/keycloak-ui-shared";
-
-import { adminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAdminClient } from "../admin-client";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 
 type UserIdpModalProps = {
   userId: string;
@@ -30,6 +29,8 @@ export const UserIdpModal = ({
   onClose,
   onRefresh,
 }: UserIdpModalProps) => {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const { addAlert, addError } = useAlerts();
   const form = useForm<FederatedIdentityRepresentation>({

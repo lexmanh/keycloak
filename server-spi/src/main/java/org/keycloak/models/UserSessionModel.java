@@ -17,10 +17,13 @@
 
 package org.keycloak.models;
 
+import org.infinispan.protostream.annotations.Proto;
+import org.infinispan.protostream.annotations.ProtoTypeId;
+import org.keycloak.util.EnumWithStableIndex;
+
 import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
-import org.keycloak.util.EnumWithStableIndex;
 
 /**
  * @author <a href="mailto:sthorger@redhat.com">Stian Thorgersen</a>
@@ -48,6 +51,11 @@ public interface UserSessionModel {
 
     String getLoginUsername();
 
+    /**
+     * Note: will not be an address when a proxy does not provide a valid one
+     *
+     * @return the ip address
+     */
     String getIpAddress();
 
     String getAuthMethod();
@@ -77,7 +85,8 @@ public interface UserSessionModel {
      */
     default AuthenticatedClientSessionModel getAuthenticatedClientSessionByClient(String clientUUID) {
         return getAuthenticatedClientSessions().get(clientUUID);
-    };
+    }
+
     /**
      * Removes authenticated client sessions for all clients whose UUID is present in {@code removedClientUUIDS} parameter.
      * @param removedClientUUIDS
@@ -96,6 +105,8 @@ public interface UserSessionModel {
     // Will completely restart whole state of user session. It will just keep same ID.
     void restartSession(RealmModel realm, UserModel user, String loginUsername, String ipAddress, String authMethod, boolean rememberMe, String brokerSessionId, String brokerUserId);
 
+    @ProtoTypeId(65536) // see org.keycloak.Marshalling
+    @Proto
     enum State implements EnumWithStableIndex {
         LOGGED_IN(0),
         LOGGING_OUT(1),

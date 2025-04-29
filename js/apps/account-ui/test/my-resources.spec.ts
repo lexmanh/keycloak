@@ -36,14 +36,20 @@ test.describe("My resources page", () => {
       "Share with alice",
     );
 
-    await page.getByRole("button", { name: "Options menu" }).click();
+    await page
+      .getByTestId("permissions")
+      .getByRole("button", { expanded: false })
+      .click();
     await page.getByRole("option", { name: "album:view" }).click();
-    await page.getByRole("button", { name: "Options menu" }).click();
+    await page
+      .getByTestId("permissions")
+      .getByRole("button", { expanded: true })
+      .click();
 
     await page.getByTestId("done").click();
 
     await page.getByTestId("expand-one").click();
-    expect(page.getByTestId("shared-with-alice")).toBeDefined();
+    await expect(page.getByTestId("shared-with-alice")).toBeVisible();
   });
 
   test("One is shared with alice", async ({ page }) => {
@@ -51,7 +57,7 @@ test.describe("My resources page", () => {
     await page.getByTestId("resources").click();
 
     await page.getByTestId("sharedWithMe").click();
-    const rowData = await page.getByTestId("row[0].name").allTextContents();
-    expect(rowData).toEqual(["one"]);
+    const rowData = page.getByTestId("row[0].name");
+    await expect(rowData).toHaveText("one");
   });
 });

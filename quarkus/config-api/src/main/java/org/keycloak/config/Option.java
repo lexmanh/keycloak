@@ -5,7 +5,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class Option<T> {
-
     private final Class<T> type;
     private final String key;
     private final OptionCategory category;
@@ -14,9 +13,11 @@ public class Option<T> {
     private final String description;
     private final Optional<T> defaultValue;
     private final List<String> expectedValues;
+    private final boolean strictExpectedValues;
+    private final boolean caseInsensitiveExpectedValues;
     private final DeprecatedMetadata deprecatedMetadata;
 
-    public Option(Class<T> type, String key, OptionCategory category, boolean hidden, boolean buildTime, String description, Optional<T> defaultValue, List<String> expectedValues, DeprecatedMetadata deprecatedMetadata) {
+    public Option(Class<T> type, String key, OptionCategory category, boolean hidden, boolean buildTime, String description, Optional<T> defaultValue, List<String> expectedValues, boolean strictExpectedValues, boolean caseInsensitiveExpectedValues, DeprecatedMetadata deprecatedMetadata) {
         this.type = type;
         this.key = key;
         this.category = category;
@@ -25,6 +26,8 @@ public class Option<T> {
         this.description = getDescriptionByCategorySupportLevel(description, category);
         this.defaultValue = defaultValue;
         this.expectedValues = expectedValues;
+        this.strictExpectedValues = strictExpectedValues;
+        this.caseInsensitiveExpectedValues = caseInsensitiveExpectedValues;
         this.deprecatedMetadata = deprecatedMetadata;
     }
 
@@ -52,8 +55,26 @@ public class Option<T> {
         return defaultValue;
     }
 
+    /**
+     * If {@link #isStrictExpectedValues()} is false, custom values can be provided
+     * Otherwise, only specified expected values can be used
+     *
+     * @return expected values
+     */
     public List<String> getExpectedValues() {
         return expectedValues;
+    }
+
+    /**
+     * Denotes whether a custom value can be provided among the expected values
+     * If strict, application fails when some custom value is provided
+     */
+    public boolean isStrictExpectedValues() {
+        return strictExpectedValues;
+    }
+
+    public boolean isCaseInsensitiveExpectedValues() {
+        return caseInsensitiveExpectedValues;
     }
 
     public Optional<DeprecatedMetadata> getDeprecatedMetadata() {
@@ -70,6 +91,8 @@ public class Option<T> {
             this.description,
             Optional.ofNullable(defaultValue),
             this.expectedValues,
+            this.strictExpectedValues,
+            this.caseInsensitiveExpectedValues,
             this.deprecatedMetadata
         );
     }

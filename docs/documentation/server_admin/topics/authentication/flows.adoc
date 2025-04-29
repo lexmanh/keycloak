@@ -16,7 +16,7 @@ An _authentication flow_ is a container of authentications, screens, and actions
 image:images/browser-flow.png[Browser Flow]
 
 ===== Auth type
-The name of the authentication or the action to execute. If an authentication is indented, it is in a sub-flow. It may or may not be executed, depending on the behavior of its parent. 
+The name of the authentication or the action to execute. If an authentication is indented, it is in a sub-flow. It may or may not be executed, depending on the behavior of its parent.
 
 . Cookie
 +
@@ -60,12 +60,12 @@ The element does not count to mark a flow as successful.
 
 ====== Conditional
 
-This requirement type is only set on sub-flows. 
+This requirement type is only set on sub-flows.
 
-* A _Conditional_ sub-flow contains executions. These executions must evaluate to logical statements. 
-* If all executions evaluate as _true_, the _Conditional_ sub-flow acts as _Required_. 
+* A _Conditional_ sub-flow contains executions. These executions must evaluate to logical statements.
+* If all executions evaluate as _true_, the _Conditional_ sub-flow acts as _Required_.
 * If any executions evaluate as _false_, the _Conditional_ sub-flow acts as _Disabled_.
-* If you do not set an execution, the _Conditional_ sub-flow acts as _Disabled_. 
+* If you do not set an execution, the _Conditional_ sub-flow acts as _Disabled_.
 * If a flow contains executions and the flow is not set to _Conditional_, {project_name} does not evaluate the executions, and the executions are considered functionally _Disabled_.
 
 ==== Creating flows
@@ -118,7 +118,7 @@ AMR claim, see https://www.rfc-editor.org/rfc/rfc8176.html[RFC-8176]). When the 
 image:images/config-authenticator-reference.png[Configuring an Authenticator Reference Value]
 
 Two types of executions exist, _automatic executions_ and _interactive executions_. _Automatic executions_ are similar to the *Cookie* execution and will automatically
-perform their action in the flow. _Interactive executions_ halt the flow to get input. Executions executing successfully set their status to _success_.  For a flow to complete, it needs at least one execution with a status of _success_. 
+perform their action in the flow. _Interactive executions_ halt the flow to get input. Executions executing successfully set their status to _success_.  For a flow to complete, it needs at least one execution with a status of _success_.
 
 You can add sub-flows to top-level flows with the *Add sub-flow* button. The *Add sub-flow* button displays the *Create Execution Flow* page. This page is similar to the *Create Top Level Form* page. The difference is that the *Flow Type* can be *basic* (default) or *form*. The *form* type constructs a sub-flow that generates a form for the user, similar to the built-in *Registration* flow.
 Sub-flows success depends on how their executions evaluate, including their contained sub-flows. See the <<_execution-requirements, execution requirements section>> for an in-depth explanation of how sub-flows work.
@@ -235,6 +235,17 @@ Creating an advanced flow such as this can have side effects. For example, if yo
 * In the *Action* menu, select *Bind flow* and select *Reset credentials flow* from the dropdown and click *Save*
 ====
 
+[[_client-policy-auth-flow]]
+==== Using Client Policies to Select an Authentication Flow
+<<_client_policies, Client Policies>> can be used to dynamically select an Authentication Flow based on specific conditions, such as requesting a particular scope or an ACR (Authentication Context Class Reference) using the `AuthenticationFlowSelectorExecutor` in combination with the condition you prefer.
+
+The `AuthenticationFlowSelectorExecutor` allows you to select an appropriate authentication flow and set the level of authentication to be applied once the selected flow is completed.
+
+A possible configuration involves using the `ACRCondition` in combination with the `AuthenticationFlowSelectorExecutor`. This setup enables you to select an authentication flow based on the requested ACR and have the ACR value included in the token using <<_mapping-acr-to-loa-realm,ACR to LoA Mapping>>.
+
+For more details, see <<_client_policies, Client Policies>>.
+
+
 [[_step-up-flow]]
 ==== Creating a browser login flow with step-up mechanism
 
@@ -271,7 +282,7 @@ Now you configure the flow for the first authentication level.
 . Enter `Level 1` as an alias.
 . Enter `1` for the Level of Authentication (LoA).
 . Set Max Age to *36000*. This value is in seconds and it is equivalent to 10 hours, which is the default `SSO Session Max` timeout set in the realm.
-  As a result, when a user authenticates with this level, subsequent SSO logins can re-use this level and the user does not need to authenticate
+  As a result, when a user authenticates with this level, subsequent SSO logins can reuse this level and the user does not need to authenticate
   with this level until the end of the user session, which is 10 hours by default.
 . Click *Save*
 +
@@ -343,7 +354,7 @@ claims= {
 ----
 
 The {project_name} javascript adapter has support for easy construct of this JSON and sending it in the login request.
-See link:{adapterguide_link_js_adapter}[Javascript adapter documentation] for more details.
+See *Keycloak JavaScript adapter* in the link:{securing_apps_link}[securing apps] section for more details.
 
 You can also use simpler parameter `acr_values` instead of `claims` parameter to request particular levels as non-essential. This is mentioned
 in the OIDC specification.
@@ -381,7 +392,19 @@ condition found in the authentication flow, such as the Username/Password in the
 and that level expired, the user is not required to re-authenticate, but `acr` in the token will have the value 0. This result is considered as authentication
 based solely on `long-lived browser cookie` as mentioned in the section 2 of OIDC Core 1.0 specification.
 
+NOTE: During the first authentication of the user, the first configured subflow with the *Conditional - Level Of Authentication* is always executed (regardless of the requested level) as
+the user does not yet have any level. Therefore, we recommend that the first level subflow contains the minimal required authenticators for user authentication. In addition, ensure that the subflows with different values of *Conditional - Level Of Authentication* are ordered starting with the lowest as shown
+in the example above. For example, if you configure a subflow with level 2 and then add another subflow with level 1, the level 2 subflow will be always asked during the first authentication, which may
+not be the desired behavior.
+
 NOTE: A conflict situation may arise when an admin specifies several flows, sets different LoA levels to each, and assigns the flows to different clients. However, the rule is always the same: if a user has a certain level, it needs only have that level to connect to a client. It's up to the admin to make sure that the LoA is coherent.
+
+NOTE: Step-up authentication with Level of Authentication conditions is intended for use cases where each level
+requires all authentication methods from the preceding levels.
+For instance, level X must always include all authentication methods required by level X-1.
+For use cases where a specific level, such as level 3, requires a different authentication method from the previous levels,
+it may be more appropriate to use mapping of ACR to a specific flow.
+For more details, see <<_client-policy-auth-flow, Using Client Policies to Select an Authentication Flow>>.
 
 *Example scenario*
 
@@ -410,11 +433,12 @@ Usually when the user is redirected to the {project_name} from client applicatio
 that realm registration is enabled and the user clicks `Register` on the login screen. Also, if <<enabling-forgot-password,Forget password>> is enabled for the realm, the user can
 click `Forget password` on the login screen, which triggers the `Reset credentials` flow where users can reset credentials after email address confirmation.
 
-Sometimes it can be useful for the client application to directly redirect the user to the *Registration* screen or to the *Reset credentials* flow. The resulting action will match the action of when the 
+Sometimes it can be useful for the client application to directly redirect the user to the *Registration* screen or to the *Reset credentials* flow. The resulting action will match the action of when the
 user clicks *Register* or *Forget password* on the normal login screen. Automatic redirect to the registration or reset-credentials screen can be done as follows:
 
-* When the client wants the user to be redirected directly to the registration, the OIDC client should replace the very last snippet from the OIDC login URL path (`/auth`) with `/registrations` . So the full URL
-might be similar to the following: `https://keycloak.example.com/realms/your_realm/protocol/openid-connect/registrations`.
+* When the client wants the user to be redirected directly to the registration, the OIDC client should add parameter `prompt=create` to the login request. As a deprecated alternative, clients can replace the very last
+snippet from the OIDC login URL path (`/auth`) with `/registrations` . So the full URL might be similar to the following: `https://keycloak.example.com/realms/your_realm/protocol/openid-connect/registrations`.
+The `prompt=create` is recommended as it is https://openid.net/specs/openid-connect-prompt-create-1_0.html[a specification standard].
 
 * When the client wants a user to be redirected directly to the `Reset credentials` flow, the OIDC client should replace the very last snippet from the OIDC login URL path (`/auth`) with `/forgot-credentials` .
 
@@ -462,7 +486,7 @@ with password and OTP:
 
 image:images/authentication-user-session-limits-browser.png[Authentication User Session Limits Browser Flow]
 
-Regarding `Post Broker login flow`,  you can add the `User Session Limits` as the only authenticator in the authentication flow  as long as you have no other authenticators that you  trigger after authentication with your identity provider.  However, make sure that this flow is configured as `Post Broker Flow` at your identity providers. This requirement exists needed so that 
+Regarding `Post Broker login flow`,  you can add the `User Session Limits` as the only authenticator in the authentication flow  as long as you have no other authenticators that you  trigger after authentication with your identity provider.  However, make sure that this flow is configured as `Post Broker Flow` at your identity providers. This requirement exists needed so that
 the authentication with Identity providers also participates in the session limits.
 
 NOTE: Currently, the administrator is responsible for maintaining consistency between the different configurations. So make sure that all your flows use same the configuration

@@ -67,7 +67,7 @@
         </dependency>
         <dependency>
             <groupId>org.keycloak</groupId>
-            <artifactId>keycloak-admin-client</artifactId>
+            <artifactId>keycloak-admin-client-tests</artifactId>
         </dependency>
         <dependency>
             <groupId>org.keycloak</groupId>
@@ -165,11 +165,6 @@
             <artifactId>keycloak-kerberos-federation</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.keycloak.testsuite</groupId>
-            <artifactId>keycloak-undertow-adapter-jakarta</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>io.undertow</groupId>
             <artifactId>undertow-servlet</artifactId>
             <version>${undertow-jakarta.version}</version>
@@ -184,12 +179,7 @@
         </dependency>
         <dependency>
             <groupId>org.keycloak</groupId>
-            <artifactId>keycloak-authz-client</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.keycloak.testsuite</groupId>
-            <artifactId>keycloak-saml-undertow-adapter-jakarta</artifactId>
-            <version>${project.version}</version>
+            <artifactId>keycloak-authz-client-tests</artifactId>
         </dependency>
         <!-- Dependency on services from integration-arquillian -->
         <dependency>
@@ -232,7 +222,7 @@
         </dependency>
         <dependency>
             <groupId>org.infinispan</groupId>
-            <artifactId>infinispan-core-jakarta</artifactId>
+            <artifactId>infinispan-core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.infinispan</groupId>
@@ -269,7 +259,7 @@
         </dependency>
         <dependency>
             <groupId>com.oracle.database.jdbc</groupId>
-            <artifactId>ojdbc11</artifactId>
+            <artifactId>ojdbc17</artifactId>
             <version>${oracle-jdbc.version}</version>
             <scope>compile</scope>
         </dependency>
@@ -282,6 +272,11 @@
             <groupId>com.microsoft.sqlserver</groupId>
             <artifactId>mssql-jdbc</artifactId>
             <version>${mssql-jdbc.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-micrometer</artifactId>
         </dependency>
     </dependencies>
 

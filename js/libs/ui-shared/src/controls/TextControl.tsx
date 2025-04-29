@@ -14,7 +14,7 @@ import {
   UseControllerProps,
   useController,
 } from "react-hook-form";
-
+import { getRuleValue } from "../utils/getRuleValue";
 import { FormLabel } from "./FormLabel";
 
 export type TextControlProps<
@@ -26,6 +26,8 @@ export type TextControlProps<
     labelIcon?: string | ReactNode;
     isDisabled?: boolean;
     helperText?: string;
+    "data-testid"?: string;
+    type?: string;
   };
 
 export const TextControl = <
@@ -34,8 +36,8 @@ export const TextControl = <
 >(
   props: TextControlProps<T, P>,
 ) => {
-  const { labelIcon, ...rest } = props;
-  const required = !!props.rules?.required;
+  const { labelIcon, helperText, ...rest } = props;
+  const required = !!getRuleValue(props.rules?.required);
   const defaultValue = props.defaultValue ?? ("" as PathValue<T, P>);
 
   const { field, fieldState } = useController({
@@ -54,7 +56,7 @@ export const TextControl = <
       <TextInput
         isRequired={required}
         id={props.name}
-        data-testid={props.name}
+        data-testid={props["data-testid"] || props.name}
         validated={
           fieldState.error ? ValidatedOptions.error : ValidatedOptions.default
         }
@@ -62,10 +64,10 @@ export const TextControl = <
         {...rest}
         {...field}
       />
-      {props.helperText && (
+      {helperText && (
         <FormHelperText>
           <HelperText>
-            <HelperTextItem>{props.helperText}</HelperTextItem>
+            <HelperTextItem>{helperText}</HelperTextItem>
           </HelperText>
         </FormHelperText>
       )}

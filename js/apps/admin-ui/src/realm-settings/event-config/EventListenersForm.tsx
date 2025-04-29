@@ -1,9 +1,19 @@
 import { ActionGroup, Button } from "@patternfly/react-core";
-import { SelectVariant } from "@patternfly/react-core/deprecated";
 import { FormProvider, UseFormReturn } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { SelectControl } from "@keycloak/keycloak-ui-shared";
-import { useServerInfo } from "../../context/server-info/ServerInfoProvider";
+import {
+  KeycloakSpinner,
+  useFetch,
+  SelectControl,
+  SelectVariant,
+} from "@keycloak/keycloak-ui-shared";
+import { useState } from "react";
+import { fetchAdminUI } from "../../context/auth/admin-ui-endpoint";
+import { useAdminClient } from "../../admin-client";
+
+type EventListenerRepresentation = {
+  id: string;
+};
 
 type EventListenersFormProps = {
   form: UseFormReturn;
@@ -15,12 +25,25 @@ export const EventListenersForm = ({
   reset,
 }: EventListenersFormProps) => {
   const { t } = useTranslation();
-  const {
-    formState: { isDirty },
-  } = form;
 
-  const serverInfo = useServerInfo();
-  const eventListeners = serverInfo.providers?.eventsListener.providers;
+  const [eventListeners, setEventListeners] =
+    useState<EventListenerRepresentation[]>();
+
+  const { adminClient } = useAdminClient();
+
+  useFetch(
+    () =>
+      fetchAdminUI<EventListenerRepresentation[]>(
+        adminClient,
+        "ui-ext/available-event-listeners",
+      ),
+    setEventListeners,
+    [],
+  );
+
+  if (!eventListeners) {
+    return <KeycloakSpinner />;
+  }
 
   return (
     <FormProvider {...form}>
@@ -38,15 +61,13 @@ export const EventListenersForm = ({
           collapsedText: t("showRemaining"),
         }}
         variant={SelectVariant.typeaheadMulti}
-        options={Object.keys(eventListeners!)}
-        typeAheadAriaLabel="Select"
+        options={eventListeners.map((value) => value.id)}
       />
       <ActionGroup>
         <Button
           variant="primary"
           type="submit"
           data-testid={"saveEventListenerBtn"}
-          isDisabled={!isDirty}
         >
           {t("save")}
         </Button>

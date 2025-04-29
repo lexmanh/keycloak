@@ -18,6 +18,7 @@
 package org.keycloak.models.jpa.session;
 
 import jakarta.persistence.Version;
+import org.hibernate.annotations.DynamicUpdate;
 import org.keycloak.storage.jpa.KeyUtils;
 
 import jakarta.persistence.Column;
@@ -44,25 +45,26 @@ import java.io.Serializable;
                 " AND sess.userSessionId > :lastSessionId" +
                 " order by sess.userSessionId"),
         @NamedQuery(name="findUserSession", query="select sess from PersistentUserSessionEntity sess where sess.offline = :offline" +
-                " AND sess.userSessionId = :userSessionId AND sess.realmId = :realmId"),
+                " AND sess.userSessionId = :userSessionId AND sess.realmId = :realmId AND sess.lastSessionRefresh >= :lastSessionRefresh"),
         @NamedQuery(name="findUserSessionsByUserId", query="select sess from PersistentUserSessionEntity sess where sess.offline = :offline" +
-                " AND sess.realmId = :realmId AND sess.userId = :userId ORDER BY sess.userSessionId"),
+                " AND sess.realmId = :realmId AND sess.userId = :userId AND sess.lastSessionRefresh >= :lastSessionRefresh ORDER BY sess.userSessionId"),
         @NamedQuery(name="findUserSessionsByBrokerSessionId", query="select sess from PersistentUserSessionEntity sess where sess.brokerSessionId = :brokerSessionId" +
-                " AND sess.realmId = :realmId AND sess.offline = :offline ORDER BY sess.userSessionId"),
+                " AND sess.realmId = :realmId AND sess.offline = :offline AND lastSessionRefresh >= :lastSessionRefresh ORDER BY sess.userSessionId"),
         @NamedQuery(name="findUserSessionsByClientId", query="SELECT sess FROM PersistentUserSessionEntity sess INNER JOIN PersistentClientSessionEntity clientSess " +
                 " ON sess.userSessionId = clientSess.userSessionId AND sess.offline = clientSess.offline AND clientSess.clientId = :clientId WHERE sess.offline = :offline " +
-                " AND sess.realmId = :realmId ORDER BY sess.userSessionId"),
+                " AND sess.realmId = :realmId AND sess.lastSessionRefresh >= :lastSessionRefresh ORDER BY sess.userSessionId"),
         @NamedQuery(name="findUserSessionsByExternalClientId", query="SELECT sess FROM PersistentUserSessionEntity sess INNER JOIN PersistentClientSessionEntity clientSess " +
                 " ON sess.userSessionId = clientSess.userSessionId AND clientSess.clientStorageProvider = :clientStorageProvider AND sess.offline = clientSess.offline AND clientSess.externalClientId = :externalClientId WHERE sess.offline = :offline " +
-                " AND sess.realmId = :realmId ORDER BY sess.userSessionId"),
+                " AND sess.realmId = :realmId AND sess.lastSessionRefresh >= :lastSessionRefresh ORDER BY sess.userSessionId"),
         @NamedQuery(name="findClientSessionsClientIds", query="SELECT clientSess.clientId, clientSess.externalClientId, clientSess.clientStorageProvider, count(clientSess)" +
                 " FROM PersistentClientSessionEntity clientSess INNER JOIN PersistentUserSessionEntity sess ON clientSess.userSessionId = sess.userSessionId AND sess.offline = clientSess.offline" +
-                " WHERE sess.offline = :offline AND sess.realmId = :realmId " +
+                " WHERE sess.offline = :offline AND sess.realmId = :realmId AND sess.lastSessionRefresh >= :lastSessionRefresh" +
                 " GROUP BY clientSess.clientId, clientSess.externalClientId, clientSess.clientStorageProvider")
 
 })
 @Table(name="OFFLINE_USER_SESSION")
 @Entity
+@DynamicUpdate
 @IdClass(PersistentUserSessionEntity.Key.class)
 public class PersistentUserSessionEntity {
 
@@ -86,6 +88,7 @@ public class PersistentUserSessionEntity {
     protected String brokerSessionId;
 
     @Version
+    @Column(name="VERSION")
     private int version;
 
     @Id

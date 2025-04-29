@@ -5,7 +5,7 @@
 
 <@tmpl.guide
 title="Using custom {project_name} images"
-summary="How to customize and optimize the {project_name} Container">
+summary="Customize and optimize the {project_name} container.">
 
 == {project_name} custom image with the Operator
 
@@ -21,6 +21,8 @@ When using the default {project_name} image, the server will perform a costly re
 To avoid this delay, you can provide a custom image with the augmentation built-in from the build time of the image.
 
 With a custom image, you can also specify the Keycloak _build-time_ configurations and extensions during the build of the container.
+
+WARNING: When using optimized custom image, `health-enabled` and `metrics-enabled` options need to be explicitly set in the Containerfile.
 
 For instructions on how to build such an image, see <@links.server id="containers"/>.
 
@@ -43,14 +45,14 @@ spec:
     hostname: test.keycloak.org
 ----
 
-[NOTE]
-====
-With custom images, every build time option passed either through a dedicated field or the `additionalOptions` is ignored.
-====
+NOTE: With custom images, every build time option passed either through a dedicated field or the `additionalOptions` is ignored.
+
+NOTE: The Operator is *unaware* of any configuration options that are specified in a custom image.
+Use the Keycloak CR for any configuration that requires Operator awareness, namely the TLS and HTTP(S) settings reflected when configuring services and probes.
 
 === Non-optimized custom image
 
-While it is considered a best practice use a pre-augmented image, if you want to use a non-optimized custom image or build time properties with an augmented image that is still possible. You just need set the `startOptimzed` field to `false` as shown in this example:
+While it is considered a best practice use a pre-augmented image, if you want to use a non-optimized custom image or build time properties with an augmented image that is still possible. You just need set the `startOptimized` field to `false` as shown in this example:
 
 [source,yaml]
 ----

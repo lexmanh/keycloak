@@ -22,6 +22,7 @@ org.keycloak.provider.ExceptionConverterSpi
 org.keycloak.models.ClientSpi
 org.keycloak.models.ClientScopeSpi
 org.keycloak.models.GroupSpi
+org.keycloak.models.IdentityProviderStorageSpi
 org.keycloak.models.RealmSpi
 org.keycloak.models.RoleSpi
 org.keycloak.models.DeploymentStateSpi
@@ -55,6 +56,8 @@ org.keycloak.email.EmailSenderSpi
 org.keycloak.email.EmailTemplateSpi
 org.keycloak.executors.ExecutorsSpi
 org.keycloak.theme.ThemeSpi
+org.keycloak.theme.ThemeManagerSpi
+org.keycloak.tracing.TracingSpi
 org.keycloak.truststore.TruststoreSpi
 org.keycloak.connections.httpclient.HttpClientSpi
 org.keycloak.authentication.AuthenticatorSpi
@@ -78,6 +81,7 @@ org.keycloak.transaction.TransactionManagerLookupSpi
 org.keycloak.credential.hash.PasswordHashSpi
 org.keycloak.credential.CredentialSpi
 org.keycloak.keys.PublicKeyStorageSpi
+org.keycloak.crl.CrlStorageSpi
 org.keycloak.keys.KeySpi
 org.keycloak.storage.DatastoreSpi
 org.keycloak.storage.role.RoleStorageProviderSpi

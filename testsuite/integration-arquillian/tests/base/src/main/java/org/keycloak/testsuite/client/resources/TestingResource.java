@@ -20,6 +20,8 @@ package org.keycloak.testsuite.client.resources;
 import org.jboss.resteasy.reactive.NoCache;
 import org.keycloak.common.Profile;
 import org.keycloak.common.enums.HostnameVerificationPolicy;
+import org.keycloak.events.EventType;
+import org.keycloak.protocol.oidc.encode.AccessTokenContext;
 import org.keycloak.representations.idm.AdminEventRepresentation;
 import org.keycloak.representations.idm.AuthenticationFlowRepresentation;
 import org.keycloak.representations.idm.EventRepresentation;
@@ -289,11 +291,6 @@ public interface TestingResource {
     @Produces(MediaType.APPLICATION_JSON)
     Response restorePeriodicTasks();
 
-    @Path("generate-audience-client-scope")
-    @POST
-    @NoCache
-    String generateAudienceClientScope(@QueryParam("realm") final String realmName, final @QueryParam("clientId") String clientId);
-
     @GET
     @Path("/uncaught-error")
     @Produces(MediaType.TEXT_HTML_UTF_8)
@@ -321,16 +318,6 @@ public interface TestingResource {
     @Produces(MediaType.TEXT_PLAIN_UTF_8)
     String runModelTestOnServer(@QueryParam("testClassName") String testClassName,
                                 @QueryParam("testMethodName") String testMethodName);
-
-    @GET
-    @Path("js/keycloak.js")
-    @Produces(MediaType.TEXT_HTML_UTF_8)
-    String getJavascriptAdapter();
-
-    @GET
-    @Path("/get-javascript-testing-environment")
-    @Produces(MediaType.TEXT_HTML_UTF_8)
-    String getJavascriptTestingEnvironment();
 
     @GET
     @Path("/list-disabled-features")
@@ -470,4 +457,27 @@ public interface TestingResource {
     @GET
     @Path("/pre-authorized-code")
     String getPreAuthorizedCode(@QueryParam("realm") final String realmName, @QueryParam("userSessionId") final String userSessionId, @QueryParam("clientId") final String clientId, @QueryParam("expiration") final int expiration);
+
+    /**
+     * Adds the following types to the email event listener included list.
+     * @param events The events to be included
+     */
+    @POST
+    @Path("/email-event-litener-provide/add-events")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public void addEventsToEmailEventListenerProvider(List<EventType> events);
+
+    /**
+     * Removes the following types from the email event listener included list.
+     * @param events The events to be removed
+     */
+    @POST
+    @Path("/email-event-litener-provide/remove-events")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public void removeEventsToEmailEventListenerProvider(List<EventType> events);
+
+    @GET
+    @Path("/token-context")
+    @Produces(MediaType.APPLICATION_JSON)
+    AccessTokenContext getTokenContext(@QueryParam("tokenId") String tokenId);
 }

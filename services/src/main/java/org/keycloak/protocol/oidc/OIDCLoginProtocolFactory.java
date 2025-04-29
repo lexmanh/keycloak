@@ -21,6 +21,7 @@ import org.keycloak.Config;
 import org.keycloak.OAuth2Constants;
 import org.keycloak.common.Profile;
 import org.keycloak.common.constants.KerberosConstants;
+import org.keycloak.common.constants.ServiceAccountConstants;
 import org.keycloak.common.util.UriUtils;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.models.ClientModel;
@@ -39,7 +40,7 @@ import org.keycloak.protocol.oidc.mappers.AddressMapper;
 import org.keycloak.protocol.oidc.mappers.AllowedWebOriginsProtocolMapper;
 import org.keycloak.protocol.oidc.mappers.AudienceResolveProtocolMapper;
 import org.keycloak.protocol.oidc.mappers.FullNameMapper;
-import org.keycloak.protocol.oidc.mappers.OrganizationMembershipMapper;
+import org.keycloak.organization.protocol.mappers.oidc.OrganizationMembershipMapper;
 import org.keycloak.protocol.oidc.mappers.UserAttributeMapper;
 import org.keycloak.protocol.oidc.mappers.UserClientRoleMappingMapper;
 import org.keycloak.protocol.oidc.mappers.UserPropertyMapper;
@@ -109,26 +110,32 @@ public class OIDCLoginProtocolFactory extends AbstractLoginProtocolFactory {
     public static final String ROLES_SCOPE_CONSENT_TEXT = "${rolesScopeConsentText}";
     public static final String ORGANIZATION_SCOPE_CONSENT_TEXT = "${organizationScopeConsentText}";
 
-    public static final String CONFIG_LEGACY_LOGOUT_REDIRECT_URI = "legacy-logout-redirect-uri";
-    public static final String SUPPRESS_LOGOUT_CONFIRMATION_SCREEN = "suppress-logout-confirmation-screen";
+    public static final String CONFIG_OIDC_REQ_PARAMS_MAX_NUMBER = "add-req-params-max-number";
+    public static final String CONFIG_OIDC_REQ_PARAMS_MAX_SIZE = "add-req-params-max-size";
+    public static final String CONFIG_OIDC_REQ_PARAMS_MAX_OVERALL_SIZE = "add-req-params-max-overall-size";
+    public static final String CONFIG_OIDC_REQ_PARAMS_FAIL_FAST = "add-req-params-fail-fast";
+
+    /**
+     * @deprecated To be removed in Keycloak 27
+     */
+    public static final String CONFIG_OIDC_ALLOW_MULTIPLE_AUDIENCES_FOR_JWT_CLIENT_AUTHENTICATION = "allow-multiple-audiences-for-jwt-client-authentication";
 
     private OIDCProviderConfig providerConfig;
 
     @Override
     public void init(Config.Scope config) {
-        initBuiltIns();
         this.providerConfig = new OIDCProviderConfig(config);
-        if (providerConfig.isLegacyLogoutRedirectUri()) {
-            logger.warnf("Deprecated switch '%s' is enabled. Please try to disable it and update your clients to use OpenID Connect compliant way for RP-initiated logout.", CONFIG_LEGACY_LOGOUT_REDIRECT_URI);
+        if (this.providerConfig.isAllowMultipleAudiencesForJwtClientAuthentication()) {
+            logger.warnf("It is allowed to have multiple audiences for the JWT client authentication. This option is not recommended and will be removed in one of the future releases."
+                    + " It is recommended to update your OAuth/OIDC clients to rather use single audience in the JWT token used for the client authentication.");
         }
-        if (providerConfig.suppressLogoutConfirmationScreen()) {
-            logger.warnf("Deprecated switch '%s' is enabled. Please try to disable it and update your clients to use OpenID Connect compliant way for RP-initiated logout.", SUPPRESS_LOGOUT_CONFIRMATION_SCREEN);
-        }
+
+        initBuiltIns();
     }
 
     @Override
     public LoginProtocol create(KeycloakSession session) {
-        return new OIDCLoginProtocol().setSession(session);
+        return new OIDCLoginProtocol(this.providerConfig).setSession(session);
     }
 
     @Override
@@ -310,6 +317,7 @@ public class OIDCLoginProtocolFactory extends AbstractLoginProtocolFactory {
         addMicroprofileJWTClientScope(newRealm);
         addAcrClientScope(newRealm);
         addBasicClientScope(newRealm);
+        addServiceAccountClientScope(newRealm);
 
         if (Profile.isFeatureEnabled(Profile.Feature.ORGANIZATION)) {
             ClientScopeModel organizationScope = newRealm.addClientScope(OAuth2Constants.ORGANIZATION);
@@ -393,7 +401,7 @@ public class OIDCLoginProtocolFactory extends AbstractLoginProtocolFactory {
     }
 
 
-    public void addAcrClientScope(RealmModel newRealm) {
+    public ClientScopeModel addAcrClientScope(RealmModel newRealm) {
         if (Profile.isFeatureEnabled(Profile.Feature.STEP_UP_AUTHENTICATION)) {
             ClientScopeModel acrScope = KeycloakModelUtils.getClientScopeByName(newRealm, ACR_SCOPE);
             if (acrScope == null) {
@@ -411,8 +419,10 @@ public class OIDCLoginProtocolFactory extends AbstractLoginProtocolFactory {
             } else {
                 logger.debugf("Client scope '%s' already exists in realm '%s'. Skip creating it.", ACR_SCOPE, newRealm.getName());
             }
+            return acrScope;
         } else {
             logger.debugf("Skip creating client scope '%s' in the realm '%s' due the step-up authentication feature is disabled.", ACR_SCOPE, newRealm.getName());
+            return null;
         }
     }
 
@@ -436,13 +446,43 @@ public class OIDCLoginProtocolFactory extends AbstractLoginProtocolFactory {
         return basicScope;
     }
 
+    public ClientScopeModel addServiceAccountClientScope(RealmModel newRealm) {
+        ClientScopeModel serviceAccountScope = KeycloakModelUtils.getClientScopeByName(newRealm, ServiceAccountConstants.SERVICE_ACCOUNT_SCOPE);
+        if (serviceAccountScope == null) {
+            serviceAccountScope = newRealm.addClientScope(ServiceAccountConstants.SERVICE_ACCOUNT_SCOPE);
+            serviceAccountScope.setDescription("Specific scope for a client enabled for service accounts");
+            serviceAccountScope.setDisplayOnConsentScreen(false);
+            serviceAccountScope.setIncludeInTokenScope(false);
+            serviceAccountScope.setProtocol(getId());
+            serviceAccountScope.addProtocolMapper(UserSessionNoteMapper.createClaimMapper(ServiceAccountConstants.CLIENT_ID_PROTOCOL_MAPPER,
+                    ServiceAccountConstants.CLIENT_ID,
+                    ServiceAccountConstants.CLIENT_ID, "String",
+                    true, true, true));
+            serviceAccountScope.addProtocolMapper(UserSessionNoteMapper.createClaimMapper(ServiceAccountConstants.CLIENT_HOST_PROTOCOL_MAPPER,
+                    ServiceAccountConstants.CLIENT_HOST,
+                    ServiceAccountConstants.CLIENT_HOST, "String",
+                    true, true, true));
+            serviceAccountScope.addProtocolMapper(UserSessionNoteMapper.createClaimMapper(ServiceAccountConstants.CLIENT_ADDRESS_PROTOCOL_MAPPER,
+                    ServiceAccountConstants.CLIENT_ADDRESS,
+                    ServiceAccountConstants.CLIENT_ADDRESS, "String",
+                    true, true, true));
+
+            logger.debugf("Client scope '%s' created in the realm '%s'.", ServiceAccountConstants.SERVICE_ACCOUNT_SCOPE, newRealm.getName());
+        } else {
+            logger.debugf("Client scope '%s' already exists in realm '%s'. Skip creating it.", ServiceAccountConstants.SERVICE_ACCOUNT_SCOPE, newRealm.getName());
+        }
+
+        return serviceAccountScope;
+    }
+
+
     @Override
     protected void addDefaults(ClientModel client) {
     }
 
     @Override
     public Object createProtocolEndpoint(KeycloakSession session, EventBuilder event) {
-        return new OIDCLoginProtocolService(session, event, providerConfig);
+        return new OIDCLoginProtocolService(session, event);
     }
 
     @Override

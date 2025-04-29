@@ -26,6 +26,12 @@ import java.io.Serializable;
  */
 public class OrganizationDomainModel implements Serializable {
 
+    /**
+     * Value used to link an identity provider with all domains from the organization. If the user's email domain matches
+     * any of the organization domains, automatic redirection to the identity will be performed.
+     */
+    public static final String ANY_DOMAIN = "ANY";
+
     private final String name;
     private final boolean verified;
 
@@ -42,7 +48,7 @@ public class OrganizationDomainModel implements Serializable {
         return this.name;
     }
 
-    public boolean getVerified() {
+    public boolean isVerified() {
         return this.verified;
     }
 

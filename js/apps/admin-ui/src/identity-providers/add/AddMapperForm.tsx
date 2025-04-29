@@ -1,19 +1,16 @@
 import type IdentityProviderMapperRepresentation from "@keycloak/keycloak-admin-client/lib/defs/identityProviderMapperRepresentation";
 import type { IdentityProviderMapperTypeRepresentation } from "@keycloak/keycloak-admin-client/lib/defs/identityProviderMapperTypeRepresentation";
-import { FormGroup } from "@patternfly/react-core";
 import {
-  Select,
-  SelectOption,
+  HelpItem,
+  KeycloakSelect,
+  SelectControl,
   SelectVariant,
-} from "@patternfly/react-core/deprecated";
+  TextControl,
+} from "@keycloak/keycloak-ui-shared";
+import { FormGroup, SelectOption } from "@patternfly/react-core";
 import { useState } from "react";
 import { Controller, UseFormReturn } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import {
-  HelpItem,
-  SelectControl,
-  TextControl,
-} from "@keycloak/keycloak-ui-shared";
 import type { IdPMapperRepresentationWithAttributes } from "./AddMapper";
 
 type AddMapperFormProps = {
@@ -74,13 +71,12 @@ export const AddMapperForm = ({
           defaultValue={mapperTypes[0].id}
           control={control}
           render={({ field }) => (
-            <Select
+            <KeycloakSelect
               toggleId="identityProviderMapper"
               data-testid="idp-mapper-select"
               isDisabled={!!id}
-              required
               onToggle={() => setMapperTypeOpen(!mapperTypeOpen)}
-              onSelect={(_, value) => {
+              onSelect={(value) => {
                 const mapperType =
                   value as IdentityProviderMapperTypeRepresentation;
                 updateMapperType(mapperType);
@@ -95,14 +91,14 @@ export const AddMapperForm = ({
               {mapperTypes.map((option) => (
                 <SelectOption
                   selected={option === field.value}
-                  datatest-id={option.id}
+                  data-testid={option.id}
                   key={option.name}
                   value={option}
                 >
                   {option.name}
                 </SelectOption>
               ))}
-            </Select>
+            </KeycloakSelect>
           )}
         />
       </FormGroup>

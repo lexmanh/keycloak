@@ -1,5 +1,6 @@
 import type CertificateRepresentation from "@keycloak/keycloak-admin-client/lib/defs/certificateRepresentation";
 import type KeyStoreConfig from "@keycloak/keycloak-admin-client/lib/defs/keystoreConfig";
+import { TextControl, useAlerts, useFetch } from "@keycloak/keycloak-ui-shared";
 import {
   ActionGroup,
   AlertVariant,
@@ -16,13 +17,10 @@ import { saveAs } from "file-saver";
 import { useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { TextControl } from "@keycloak/keycloak-ui-shared";
-import { adminClient } from "../../admin-client";
-import { DefaultSwitchControl } from "../../components/SwitchControl";
-import { useAlerts } from "../../components/alert/Alerts";
+import { useAdminClient } from "../../admin-client";
 import { FormAccess } from "../../components/form/FormAccess";
+import { DefaultSwitchControl } from "../../components/SwitchControl";
 import { convertAttributeNameToForm } from "../../util";
-import { useFetch } from "../../utils/useFetch";
 import useToggle from "../../utils/useToggle";
 import { FormFields } from "../ClientDetails";
 import { Certificate } from "./Certificate";
@@ -31,13 +29,21 @@ import { ImportFile, ImportKeyDialog } from "./ImportKeyDialog";
 
 type KeysProps = {
   save: () => void;
+  refresh: () => void;
   clientId: string;
   hasConfigureAccess?: boolean;
 };
 
 const attr = "jwt.credential";
 
-export const Keys = ({ clientId, save, hasConfigureAccess }: KeysProps) => {
+export const Keys = ({
+  clientId,
+  save,
+  refresh: refreshParent,
+  hasConfigureAccess,
+}: KeysProps) => {
+  const { adminClient } = useAdminClient();
+
   const { t } = useTranslation();
   const {
     control,
@@ -51,7 +57,10 @@ export const Keys = ({ clientId, save, hasConfigureAccess }: KeysProps) => {
     useToggle();
   const [openImportKeys, toggleOpenImportKeys, setOpenImportKeys] = useToggle();
   const [key, setKey] = useState(0);
-  const refresh = () => setKey(key + 1);
+  const refresh = () => {
+    setKey(key + 1);
+    refreshParent();
+  };
 
   const useJwksUrl = useWatch({
     control,

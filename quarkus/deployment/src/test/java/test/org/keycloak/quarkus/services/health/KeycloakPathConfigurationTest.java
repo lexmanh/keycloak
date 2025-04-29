@@ -16,29 +16,25 @@
  */
 package test.org.keycloak.quarkus.services.health;
 
-import io.quarkus.test.QuarkusUnitTest;
-import io.restassured.RestAssured;
-import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.spec.JavaArchive;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
-
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.CoreMatchers.is;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
+import io.restassured.RestAssured;
+
+@QuarkusTest
+@TestProfile(MetricsEnabledProfileWithPath.class)
 class KeycloakPathConfigurationTest {
 
     @BeforeEach
-    void setUpPort() {
+    void setUp() {
         RestAssured.port = 9001;
     }
-
-    @RegisterExtension
-    static final QuarkusUnitTest test = new QuarkusUnitTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                .addAsResource("keycloak.conf", "META-INF/keycloak.conf"))
-            .overrideConfigKey("kc.http-relative-path","/auth")
-            .overrideConfigKey("quarkus.micrometer.export.prometheus.path", "/prom/metrics");
 
     @Test
     void testMetrics() {
@@ -97,11 +93,16 @@ class KeycloakPathConfigurationTest {
     }
 
     @Test
-    void testRootUnavailable() {
+    void testRootRedirect() {
+        given().basePath("/").redirects().follow(false)
+                .when().get("")
+                .then()
+                .statusCode(302)
+                .header("Location", is("/auth"));
+
         given().basePath("/")
                 .when().get("")
                 .then()
-                // application root is configured to /auth, so we expect 404 on /
-                .statusCode(404);
+                .statusCode(200);
     }
 }

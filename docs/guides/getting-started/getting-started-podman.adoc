@@ -2,7 +2,7 @@
 
 <@tmpl.guide
 title="Podman"
-summary="Get started with {project_name} on Podman">
+summary="Get started with {project_name} on Podman.">
 
 :containerCommand: podman
 
@@ -11,6 +11,8 @@ summary="Get started with {project_name} on Podman">
 :links-account-console: http://localhost:8080/realms/myrealm/account[{project_name} Account Console]
 
 == Before you start
+
+include::templates/hw-requirements.adoc[]
 
 Make sure you have Podman installed.
 

@@ -167,8 +167,8 @@ Enabled when::
 Enables or disables an attribute. If set to `Always`, the attribute is available from any user profile context.
 If set to `Scopes are requested`, the attribute is only available when the client acting on behalf of the user is requesting a
 set of one or more scopes. You can use this option to dynamically enforce certain attributes depending on the client scopes
-being requested. For the account and administration consoles, scopes are not evaluated and the attribute is always enabled.
-That is because filtering attributes by scopes only works when running authentication flows.
+being requested. For the administration console, scopes are not evaluated and the attribute is always enabled.
+That is because filtering attributes by scopes only works when running end-user authentication flows.
 
 Required::
 Set the conditions to mark an attribute as required. If disabled, the attribute is optional.
@@ -273,6 +273,10 @@ The list below provides a list of all the built-in validators:
 |Check if the value has a valid format based on the realm and/or user locale.
 | None
 
+|iso-date
+|Check if the value has a valid format based on ISO 8601. This validator can be used with inputs using the html5-date input type.
+| None
+
 |person-name-prohibited-characters
 | Check if the value is a valid person name as an additional barrier for attacks such as script injection. The validation is based on a default RegEx pattern that blocks characters not common in person names.
 |
@@ -281,6 +285,7 @@ The list below provides a list of all the built-in validators:
 
 |username-prohibited-characters
 | Check if the value is a valid username as an additional barrier for attacks such as script injection. The validation is based on a default RegEx pattern that blocks characters not common in usernames.
+When the realm setting `Email as username` is enabled, this validator is skipped to allow email values.
 |
 
 *error-message*: the key of the error message in i18n bundle. If not set a generic message is used.
@@ -404,7 +409,7 @@ number of digits expected in a determined position. For instance, a format `(\{2
 |Number UnFormat
 |If set, the `data-kcNumberUnFormat` attribute is added to the field to format the value based on a given format before submitting the form. This annotation
 is useful if you do not want to store any format for a specific attribute but only format the value on the client side. For instance, if the current value
-is `(00) 00000-0000`, the value will change to `00000000000` if you set the value `\{11}` to this annotation or any other format you want by specifying a set of one or ore group of digits.
+is `(00) 00000-0000`, the value will change to `00000000000` if you set the value `\{11}` to this annotation or any other format you want by specifying a set of one or more group of digits.
 Make sure to add validators to perform server-side validations before storing values.
 
 |===

@@ -122,11 +122,6 @@ public class KeycloakDistributionDecorator implements KeycloakDistribution {
     }
 
     @Override
-    public void assertStopped() {
-        delegate.assertStopped();
-    }
-
-    @Override
     public void setRequestPort() {
         delegate.setRequestPort();
     }
@@ -143,9 +138,15 @@ public class KeycloakDistributionDecorator implements KeycloakDistribution {
         }
 
         if (type.isInstance(delegate)) {
+            //noinspection unchecked
             return (D) delegate;
         }
 
         throw new IllegalArgumentException("Not a " + type + " type");
+    }
+
+    @Override
+    public void clearEnv() {
+        delegate.clearEnv();
     }
 }
