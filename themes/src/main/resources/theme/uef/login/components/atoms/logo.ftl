@@ -1,4 +1,4 @@
-<#import "/assets/logos/loctroi.ftl" as logo>
+<#import "/assets/logos/logo.ftl" as logo>
 <#macro kw>
   <div class="css-1vmv954">
     <@logo.kw />
