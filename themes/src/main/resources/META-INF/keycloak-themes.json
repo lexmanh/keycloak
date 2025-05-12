@@ -10,19 +10,15 @@
     },
     {
       "name": "keycloak.v2",
-      "types": ["account", "admin"]
+      "types": ["login"]
     },
     {
-      "name": "loctroi",
+      "name": "uef",
       "types": ["account", "login", "admin", "welcome", "email"]
     },
     {
-      "name": "farmerp",
-      "types": ["account", "login", "admin", "welcome", "email"]
-    },
-    {
-      "name": "runclub",
-      "types": ["account", "login", "admin", "welcome", "email"]
+      "name": "uef.v2",
+      "types": ["account"]
     }
   ]
 }
