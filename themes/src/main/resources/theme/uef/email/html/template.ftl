@@ -12,8 +12,8 @@
                     </tr>
                     <tr>
                         <td style="text-align:center;">
-                          <a href="https://account.uef.edu.vn" title="logo" target="_blank">
-                            <img width="94" src="https://account.uef.edu.vn/logo.png" title="logo" alt="logo">
+                          <a href="https://accounts.uef.edu.vn" title="logo" target="_blank">
+                            <img width="94" src="https://accounts.uef.edu.vn/logo.png" title="logo" alt="logo">
                           </a>
                           <h3>FARM ERP</h3>
                         </td>
