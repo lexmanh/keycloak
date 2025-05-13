@@ -97,3 +97,4 @@ quarkus/data/*.db
 
 .env
 .env.test
+quarkus/container/build-and-push-dockerhub.sh
