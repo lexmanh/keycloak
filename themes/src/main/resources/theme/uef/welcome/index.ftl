@@ -27,17 +27,13 @@
 <div class="wrapper">
     <div class="content">
         <div class="logo">
-                <img src="welcome-content/uef-logo.png" alt="FARM ERP" border="0" />
+                <img src="welcome-content/uef-logo.png" alt="UEF Accounts" border="0" />
         </div>
-        <h1>Welcome to FarmErp SSO</h1>
+        <h1>Welcome to UEF SSO</h1>
 
-        <h3>Your FarmErp SSO is running.</h3>
+        <h3>Your UEF SSO is running.</h3>
 
         <p><a href="http://www.keycloak.org/docs">Documentation</a> | <a href="admin/">Administration Console</a> </p>
-
-        <p><a href="http://www.keycloak.org">FarmErp SSO Project</a> |
-            <a href="https://groups.google.com/forum/#!forum/keycloak-user">Mailing List</a> |
-            <a href="https://github.com/keycloak/keycloak/issues">Report an issue</a></p>
     </div>
 </div>
 </body>
