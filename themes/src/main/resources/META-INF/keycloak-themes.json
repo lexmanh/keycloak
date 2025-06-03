@@ -14,7 +14,7 @@
     },
     {
       "name": "uef",
-      "types": ["account", "login", "admin", "email"]
+      "types": ["account", "login", "admin", "welcome", "email"]
     },
     {
       "name": "uef.v2",
