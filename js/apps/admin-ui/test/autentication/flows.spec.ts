@@ -56,7 +56,7 @@ test.describe("Authentication test", () => {
     const itemId = "browser";
     await searchItem(page, "Search for flow", itemId);
     await expect(getRowByCellText(page, itemId)).toBeVisible();
-    await expect(getRowByCellText(page, "clients")).not.toBeVisible();
+    await expect(getRowByCellText(page, "clients")).toBeHidden();
   });
 
   test("should create duplicate of existing flow", async ({ page }) => {
@@ -111,7 +111,7 @@ test.describe("Authentication test", () => {
 
       await addCondition(
         page,
-        flowName + " Browser - Conditional OTP",
+        flowName + " Browser - Conditional 2FA",
         "conditional-user-role",
       );
 
@@ -122,7 +122,7 @@ test.describe("Authentication test", () => {
       await clickTableRowItem(page, flowName);
 
       const name = "SubFlow";
-      await addSubFlow(page, flowName + " Browser - Conditional OTP", name);
+      await addSubFlow(page, flowName + " Browser - Conditional 2FA", name);
 
       await assertNotificationMessage(page, "Flow successfully updated");
       await assertRowExists(page, name);

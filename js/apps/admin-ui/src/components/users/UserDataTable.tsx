@@ -170,9 +170,7 @@ export function UserDataTable() {
       params.search = searchParam;
     }
 
-    if (activeFilters.exact) {
-      params.exact = true;
-    }
+    if (activeFilters.exact) params.exact = true;
 
     if (!listUsers && !(params.search || params.q)) {
       return [];
@@ -232,7 +230,7 @@ export function UserDataTable() {
 
   const goToCreate = () => navigate(toAddUser({ realm: realmName }));
 
-  if (!uiRealmInfo || !realm) {
+  if (uiRealmInfo.userProfileProvidersEnabled === undefined || !realm) {
     return <KeycloakSpinner />;
   }
 

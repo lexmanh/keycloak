@@ -288,7 +288,7 @@ public abstract class AbstractTokenExchangeProvider implements TokenExchangeProv
             event.error(Errors.NOT_ALLOWED);
             throw new CorsErrorResponseException(cors, OAuthErrorException.ACCESS_DENIED, "Client not allowed to exchange", Response.Status.FORBIDDEN);
         }
-        BrokeredIdentityContext context = externalExchangeContext.provider().exchangeExternal(event, formParams);
+        BrokeredIdentityContext context = externalExchangeContext.provider().exchangeExternal(this, this.context);
         if (context == null) {
             event.error(Errors.INVALID_ISSUER);
             throw new CorsErrorResponseException(cors, Errors.INVALID_ISSUER, "Invalid " + OAuth2Constants.SUBJECT_ISSUER + " parameter", Response.Status.BAD_REQUEST);
@@ -323,7 +323,7 @@ public abstract class AbstractTokenExchangeProvider implements TokenExchangeProv
         }
 
         UserModel user = null;
-        if (! context.getIdpConfig().isTransientUsers()) {
+        if (!context.getIdpConfig().isTransientUsers()) {
             FederatedIdentityModel federatedIdentityModel = new FederatedIdentityModel(providerId, context.getId(),
                     context.getUsername(), context.getToken());
 
@@ -435,9 +435,9 @@ public abstract class AbstractTokenExchangeProvider implements TokenExchangeProv
         }
     }
 
-    record ExternalExchangeContext (ExchangeExternalToken provider, IdentityProviderModel idpModel) {};
+    protected record ExternalExchangeContext (ExchangeExternalToken provider, IdentityProviderModel idpModel) {};
 
-    private ExternalExchangeContext locateExchangeExternalTokenByAlias(String alias) {
+    protected ExternalExchangeContext locateExchangeExternalTokenByAlias(String alias) {
         try {
             IdentityProvider<?> idp = IdentityBrokerService.getIdentityProvider(session, alias);
 
