@@ -12,7 +12,7 @@
                     </tr>
                     <tr>
                         <td style="text-align:center;">
-                          <a href="https://accounts.uef.edu.vn" title="logo" target="_blank">
+                          <a href="https://sso.uef.edu.vn" title="logo" target="_blank">
                             <img width="94" src="https://static-cdn.uef.edu.vn/s-img/logo-uef-home.jpg" title="logo" alt="logo">
                           </a>
                           <h3>UEF Accounts</h3>

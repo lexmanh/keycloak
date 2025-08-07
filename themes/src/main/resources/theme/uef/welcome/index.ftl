@@ -27,7 +27,7 @@
 <div class="wrapper">
     <div class="content">
         <div class="logo">
-                <img src="welcome-content/uef-logo.png" alt="UEF Accounts" border="0" />
+                <img src="welcome-content/uef-logo.png" alt="UEF SSO" border="0" />
         </div>
         <h1>Welcome to UEF SSO</h1>
 
