@@ -41,7 +41,10 @@ public class UsernameProhibitedCharactersValidator extends AbstractStringValidat
 
     public static final UsernameProhibitedCharactersValidator INSTANCE = new UsernameProhibitedCharactersValidator();
 
-    protected static final Pattern PATTERN = Pattern.compile("^[^<>&\"'\\s\\v\\h$%!#?§,;:*~/\\\\|^=\\[\\]{}()`\\p{Cntrl}]+$");
+    // protected static final Pattern PATTERN = Pattern.compile("^[^<>&\"'\\s\\v\\h$%!#?§,;:*~/\\\\|^=\\[\\]{}()`\\p{Cntrl}]+$");
+
+    // Temporarily allow '#' character in username to support legacy use cases
+    protected static final Pattern PATTERN = Pattern.compile("^[^<>&\"'\\s\\v\\h$%!?§,;:*~/\\\\|^=\\[\\]{}()`\\p{Cntrl}]+$");
 
     public static final String MESSAGE_NO_MATCH = "error-username-invalid-character";
 
