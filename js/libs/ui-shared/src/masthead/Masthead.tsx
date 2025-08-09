@@ -34,7 +34,7 @@ function loggedInUserName(
   const preferredUsername = token.preferred_username;
 
   if (givenName && familyName) {
-    return t("fullName", { givenName, familyName });
+    return t("fullName", { familyName, givenName }); // change fullName with familyName and givenName
   }
 
   return givenName || familyName || preferredUsername || t("unknownUser");

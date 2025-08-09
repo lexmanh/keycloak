@@ -63,6 +63,9 @@
     <#if displayInfo>
       <#nested "info">
     </#if>
+    <div class="help-link">
+      <p>${msg("helpMessage")?no_esc}</p>
+    </div>
   </#assign>
 
   <html<#if realm.internationalizationEnabled> lang="${locale.currentLanguageTag}"</#if>>
