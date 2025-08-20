@@ -1,3 +1,0 @@
-loginAccountTitle=Đăng nhập vào tài khoản của bạn
-loginTitle=Đăng nhập vào {0}
-loginTitleHtml={0}

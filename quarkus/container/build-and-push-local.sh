@@ -11,8 +11,7 @@ echo "Build and push baget to local registry"
 docker buildx build --platform "linux/amd64" \
    -f ./Dockerfile \
    --build-arg KEYCLOAK_DIST=keycloak-999.0.0-SNAPSHOT.tar.gz \
-   -t cr.uef.edu.vn/uef/keycloak:dev-250809 \
-   -t cr.uef.edu.vn/uef/keycloak:1.0.4 \
+   -t cr.uef.edu.vn/uef/keycloak:1.0.6\
    -t cr.uef.edu.vn/uef/keycloak:latest \
    . --push
 

@@ -17,7 +17,13 @@
   section
 >
   <#if section="header">
-    ${msg("loginAccountTitle")}
+    <#if client.name?has_content>
+      ${msg("loginClientAppIntro")}
+      <a id="backToApplication" href="${client.baseUrl}">${advancedMsg(client.name)}</a>
+    <#else>
+      ${msg("loginAccountTitle")}
+    </#if>
+    
   <#elseif section="form">
     <#if realm.password>
       <@form.kw

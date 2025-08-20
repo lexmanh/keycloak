@@ -15,6 +15,8 @@
     <#list properties.favicons?split(" ") as favicon>
       <link href="${url.resourcesPath}/${favicon?split('==')[0]}" rel="${favicon?split('==')[1]}">
     </#list>
+  <#else>
+    <link rel="shortcut icon" href="${url.resourcesPath}/favicon.ico" type="image/x-icon">
   </#if>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
