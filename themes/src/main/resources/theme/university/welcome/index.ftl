@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="UEF I.D. - Đăng nhập một lần để truy cập tất cả dịch vụ của Trường Đại học Kinh tế - Tài chính TP.HCM">
-    <title>Chào mừng đến với UEF SSO</title>
+    <title>Chào mừng đến với UEF ID</title>
     <link rel="shortcut icon" href="welcome-content/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.10/dist/tailwind.min.css">
     <link rel="stylesheet" href="welcome-content/styles.css">
@@ -13,7 +13,7 @@
     <div class="wrapper" role="main">
         <div class="content">
             <div class="logo">
-                <img src="welcome-content/uef-logo.png" alt="Logo UEF SSO" width="150" height="50" />
+                <img src="welcome-content/uef-logo.png" alt="Logo UEF ID" width="150" height="50" />
             </div>
             <h2 class="mt-4">Chào mừng đến với UEF I.D.</h2>
             <p class="my-4">Truy cập tất cả các dịch vụ của Trường Đại học Kinh tế - Tài chính TP.HCM - UEF với một lần đăng nhập duy nhất, an toàn.</p>

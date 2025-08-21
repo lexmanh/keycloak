@@ -9,7 +9,7 @@ orgInviteBodyPersonalizedHtml=<p>Xin chào, {5} {6}.</p><p>Bạn được mời 
 emailUpdateConfirmationSubject=Xác minh email mới
 emailUpdateConfirmationBody=Để cập nhật tài khoản {2} với địa chỉ email {1}, nhấp vào liên kết dưới đây\n\n{0}\n\nLiên kết này sẽ hết hạn trong vòng {3}.\n\nNếu bạn không muốn tiếp tục với thay đổi này, chỉ cần bỏ qua tin nhắn này.
 emailUpdateConfirmationBodyHtml=<p>Để cập nhật tài khoản {2} với địa chỉ email {1}, nhấp vào liên kết dưới đây</p><p><a href="{0}">{0}</a></p><p>Liên kết này sẽ hết hạn trong vòng {3}.</p><p>Nếu bạn không muốn tiếp tục với thay đổi này, chỉ cần bỏ qua tin nhắn này.</p>
-emailTestSubject=[UEF SSO] - Tin nhắn thử SMTP
+emailTestSubject=[UEF ID] - Tin nhắn thử SMTP
 emailTestBody=Đây là tin nhắn thử
 emailTestBodyHtml=<p>Đây là tin nhắn thử</p>
 identityProviderLinkSubject=Liên kết {0}
