@@ -136,3 +136,13 @@ a {
     text-align: center;
     margin: 0 auto;
 }
+
+.text-primary-500,
+.text-primary-600 {
+    color: #009900;
+}
+
+.text-primary-500:hover,
+.text-primary-600:hover {
+    color: #016d01;
+}

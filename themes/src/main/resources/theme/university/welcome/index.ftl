@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="UEF I.D. - Đăng nhập một lần để truy cập tất cả dịch vụ của Trường Đại học Kinh tế - Tài chính TP.HCM">
+    <meta name="description" content="UEF ID - Đăng nhập một lần để truy cập tất cả dịch vụ của Trường Đại học Kinh tế - Tài chính TP.HCM">
     <title>Chào mừng đến với UEF ID</title>
     <link rel="shortcut icon" href="welcome-content/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.10/dist/tailwind.min.css">
@@ -15,10 +15,10 @@
             <div class="logo">
                 <img src="welcome-content/uef-logo.png" alt="Logo UEF ID" width="150" height="50" />
             </div>
-            <h2 class="mt-4">Chào mừng đến với UEF I.D.</h2>
+            <h2 class="mt-4">Chào mừng đến với UEF ID</h2>
             <p class="my-4">Truy cập tất cả các dịch vụ của Trường Đại học Kinh tế - Tài chính TP.HCM - UEF với một lần đăng nhập duy nhất, an toàn.</p>
             <div id="auth-section" class="my-4">
-                <a href="${(url.loginUrl)!'/realms/university/account'}" class="btn btn-primary">Đăng nhập với UEF I.D.</a>
+                <a href="${(url.loginUrl)!'/realms/university/account'}" class="btn btn-primary">Đăng nhập với UEF ID</a>
             </div>
             <div class="row">
                 <div class="col">
