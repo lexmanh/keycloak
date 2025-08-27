@@ -22,12 +22,12 @@
                     <tr>
                         <td>
                             <table width="85%" border="0" align="center" cellpadding="0" cellspacing="0"
-                                style="text-align:center">
+                                style="text-align:left;">
                                 <tr>
                                     <td style="height:40px;">&nbsp;</td>
                                 </tr>
                                 <tr>
-                                    <td style="font-size:18px; color:#505050;">
+                                    <td style="font-size:16px; color:#505050;">
                                         <#nested>
                                     </td>
                                 </tr>
@@ -41,7 +41,7 @@
                     </tr>
                     <tr>
                         <td style="text-align:center; background-color: #f7f7f7;padding-top: 55px;padding-bottom: 55px;">
-                            <h5 style="font-size:14px; color:#505050; line-height:28px; margin: 0 0 5px;">UEF ID</h5>
+                            <h5 style="font-size:14px; color:#505050; line-height:28px; margin: 0 0 5px;">${realmName}</h5>
                             <p style="font-size:16px; color:#858585; line-height:28px; margin:0 0 0;">${kcSanitize(msg("emailFooterCopyright", 2025))}
                         </td>
                     </tr>
