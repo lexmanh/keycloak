@@ -5,6 +5,7 @@
 # Intellij
 ###################
 .idea
+.run
 *.iml
 !.idea/icon.png
 
@@ -98,3 +99,7 @@ quarkus/data/*.db
 .env
 .env.test
 quarkus/container/build-and-push-dockerhub.sh
+
+# Keycloak state dir as suggested in the docs
+# -Dkc.home.dir=.kc
+.kc

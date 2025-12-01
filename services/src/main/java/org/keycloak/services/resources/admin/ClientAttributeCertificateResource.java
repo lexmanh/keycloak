@@ -17,21 +17,34 @@
 
 package org.keycloak.services.resources.admin;
 
-import com.google.common.base.Strings;
-import jakarta.ws.rs.QueryParam;
-import org.eclipse.microprofile.openapi.annotations.Operation;
-import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
-import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
-import org.eclipse.microprofile.openapi.annotations.tags.Tag;
-import org.jboss.logging.Logger;
-import org.jboss.resteasy.reactive.NoCache;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
+import java.security.PrivateKey;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+import java.util.Calendar;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.NotAcceptableException;
 import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
 
 import org.keycloak.common.crypto.CryptoIntegration;
+import org.keycloak.common.util.KeystoreUtil.KeystoreFormat;
 import org.keycloak.common.util.PemUtils;
 import org.keycloak.common.util.StreamUtil;
-import org.keycloak.common.util.KeystoreUtil.KeystoreFormat;
 import org.keycloak.events.admin.OperationType;
 import org.keycloak.events.admin.ResourceType;
 import org.keycloak.http.FormPartValue;
@@ -48,26 +61,13 @@ import org.keycloak.services.resources.KeycloakOpenAPI;
 import org.keycloak.services.resources.admin.fgap.AdminPermissionEvaluator;
 import org.keycloak.services.util.CertificateInfoHelper;
 
-import jakarta.ws.rs.BadRequestException;
-import jakarta.ws.rs.Consumes;
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.Produces;
-import jakarta.ws.rs.core.MediaType;
-import jakarta.ws.rs.core.MultivaluedMap;
-import jakarta.ws.rs.core.Response;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.KeyStore;
-import java.security.PrivateKey;
-import java.security.UnrecoverableKeyException;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
-import java.util.Calendar;
-import java.util.Set;
-import java.util.stream.Collectors;
+import com.google.common.base.Strings;
+import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.extensions.Extension;
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
+import org.eclipse.microprofile.openapi.annotations.tags.Tag;
+import org.jboss.logging.Logger;
+import org.jboss.resteasy.reactive.NoCache;
 
 /**
  * @resource Client Attribute Certificate
@@ -342,15 +342,15 @@ public class ClientAttributeCertificateResource {
             throw new ErrorResponseException("password-missing", "Need to specify a store password for jks generation and download", Response.Status.BAD_REQUEST);
         }
 
-        CertificateRepresentation info;
-        if (config.getKeySize() <= 0 || config.getValidity() <= 0) {
-            info = KeycloakModelUtils.generateKeyPairCertificate(client.getClientId());
-        }
-        else {
-            Calendar calendar = Calendar.getInstance();
-            calendar.add(Calendar.YEAR, config.getValidity());
-            info = KeycloakModelUtils.generateKeyPairCertificate(client.getClientId(), config.getKeySize(), calendar);
-        }
+        int keySize = config.getKeySize() != null && config.getKeySize() > 0
+                ? config.getKeySize()
+                : KeycloakModelUtils.DEFAULT_RSA_KEY_SIZE;
+        int validity = config.getValidity() != null && config.getValidity() > 0
+                ? config.getValidity()
+                : KeycloakModelUtils.DEFAULT_CERTIFICATE_VALIDITY_YEARS;
+        Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.YEAR, validity);
+        CertificateRepresentation info = KeycloakModelUtils.generateKeyPairCertificate(client.getClientId(), keySize, calendar);
         byte[] rtn = getKeystore(config, info.getPrivateKey(), info.getCertificate());
 
         info.setPrivateKey(null);

@@ -17,14 +17,16 @@
 
 package org.keycloak.storage.datastore;
 
-import org.jboss.logging.Logger;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.regex.Pattern;
+
 import org.keycloak.common.Version;
 import org.keycloak.migration.MigrationModel;
 import org.keycloak.migration.ModelVersion;
 import org.keycloak.migration.migrators.MigrateTo12_0_0;
 import org.keycloak.migration.migrators.MigrateTo14_0_0;
 import org.keycloak.migration.migrators.MigrateTo18_0_0;
-import org.keycloak.migration.migrators.MigrateTo20_0_0;
 import org.keycloak.migration.migrators.MigrateTo1_2_0;
 import org.keycloak.migration.migrators.MigrateTo1_3_0;
 import org.keycloak.migration.migrators.MigrateTo1_4_0;
@@ -34,6 +36,7 @@ import org.keycloak.migration.migrators.MigrateTo1_7_0;
 import org.keycloak.migration.migrators.MigrateTo1_8_0;
 import org.keycloak.migration.migrators.MigrateTo1_9_0;
 import org.keycloak.migration.migrators.MigrateTo1_9_2;
+import org.keycloak.migration.migrators.MigrateTo20_0_0;
 import org.keycloak.migration.migrators.MigrateTo21_0_0;
 import org.keycloak.migration.migrators.MigrateTo22_0_0;
 import org.keycloak.migration.migrators.MigrateTo23_0_0;
@@ -44,6 +47,8 @@ import org.keycloak.migration.migrators.MigrateTo26_0_0;
 import org.keycloak.migration.migrators.MigrateTo26_1_0;
 import org.keycloak.migration.migrators.MigrateTo26_2_0;
 import org.keycloak.migration.migrators.MigrateTo26_3_0;
+import org.keycloak.migration.migrators.MigrateTo26_4_0;
+import org.keycloak.migration.migrators.MigrateTo26_4_3;
 import org.keycloak.migration.migrators.MigrateTo2_0_0;
 import org.keycloak.migration.migrators.MigrateTo2_1_0;
 import org.keycloak.migration.migrators.MigrateTo2_2_0;
@@ -72,9 +77,7 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.storage.MigrationManager;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.regex.Pattern;
+import org.jboss.logging.Logger;
 
 /**
  * This wraps the functionality for migrations of the storage.
@@ -127,6 +130,8 @@ public class DefaultMigrationManager implements MigrationManager {
             new MigrateTo26_1_0(),
             new MigrateTo26_2_0(),
             new MigrateTo26_3_0(),
+            new MigrateTo26_4_0(),
+            new MigrateTo26_4_3()
     };
 
     private final KeycloakSession session;
@@ -223,9 +228,9 @@ public class DefaultMigrationManager implements MigrationManager {
 
     public static ModelVersion convertRHSSOVersionToKeycloakVersion(String version) {
         // look for the keycloakVersion pattern to identify it as RH SSO
-        for (Pattern pattern : PATTERN_MATCHER.keySet()) {
-            if (pattern.matcher(version).find()) {
-                return PATTERN_MATCHER.get(pattern);
+        for (var entry : PATTERN_MATCHER.entrySet()) {
+            if (entry.getKey().matcher(version).find()) {
+                return entry.getValue();
             }
         }
         // chceck if the version is in format for CD releases, e.g.: "keycloakVersion": "6"

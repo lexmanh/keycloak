@@ -1,16 +1,15 @@
 package org.keycloak.testframework.realm;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+
 import org.keycloak.models.credential.OTPCredentialModel;
 import org.keycloak.models.utils.HmacOTP;
 import org.keycloak.models.utils.ModelToRepresentation;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.FederatedIdentityRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
-
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 
 public class UserConfigBuilder {
 
@@ -56,8 +55,18 @@ public class UserConfigBuilder {
         return this;
     }
 
-    public UserConfigBuilder emailVerified() {
-        rep.setEmailVerified(true);
+    public UserConfigBuilder firstName(String firstName) {
+        rep.setFirstName(firstName);
+        return this;
+    }
+
+    public UserConfigBuilder lastName(String lastName) {
+        rep.setLastName(lastName);
+        return this;
+    }
+
+    public UserConfigBuilder emailVerified(boolean verified) {
+        rep.setEmailVerified(verified);
         return this;
     }
 
@@ -72,13 +81,12 @@ public class UserConfigBuilder {
     }
 
     public UserConfigBuilder clientRoles(String client, String... roles) {
-        if (rep.getClientRoles() == null) {
-            rep.setClientRoles(new HashMap<>());
-        }
-        if (!rep.getClientRoles().containsKey(client)) {
-            rep.getClientRoles().put(client, new LinkedList<>());
-        }
-        rep.getClientRoles().get(client).addAll(List.of(roles));
+        rep.setClientRoles(Collections.combine(rep.getClientRoles(), client, roles));
+        return this;
+    }
+
+    public UserConfigBuilder requiredActions(String... requiredActions) {
+        rep.setRequiredActions(Collections.combine(rep.getRequiredActions(), requiredActions));
         return this;
     }
 
@@ -89,6 +97,11 @@ public class UserConfigBuilder {
 
     public UserConfigBuilder attribute(String key, String... value) {
         rep.setAttributes(Collections.combine(rep.getAttributes(), key, value));
+        return this;
+    }
+
+    public UserConfigBuilder attributes(Map<String, List<String>> attributes) {
+        rep.setAttributes(Collections.combine(rep.getAttributes(), attributes));
         return this;
     }
 

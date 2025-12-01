@@ -34,22 +34,44 @@ public interface UserSessionProvider extends Provider {
     /**
      * Returns currently used Keycloak session.
      * @return {@link KeycloakSession}
+     * @deprecated for removal.
      */
+    // It is not used anywhere. Remove it?
+    @Deprecated(since = "26.4", forRemoval = true)
     KeycloakSession getKeycloakSession();
 
     AuthenticatedClientSessionModel createClientSession(RealmModel realm, ClientModel client, UserSessionModel userSession);
 
     /**
-     * @deprecated Use {@link #getClientSession(UserSessionModel, ClientModel, String, boolean)} instead.
+     * @deprecated Use {@link #getClientSession(UserSessionModel, ClientModel, boolean)} instead.
      */
+    @Deprecated(since = "26.4", forRemoval = true)
     default AuthenticatedClientSessionModel getClientSession(UserSessionModel userSession, ClientModel client, UUID clientSessionId, boolean offline) {
-        return getClientSession(userSession, client, clientSessionId == null ? null : clientSessionId.toString(), offline);
+        return getClientSession(userSession, client, offline);
     }
-    AuthenticatedClientSessionModel getClientSession(UserSessionModel userSession, ClientModel client, String clientSessionId, boolean offline);
+
+    /**
+     * @deprecated Use {@link #getClientSession(UserSessionModel, ClientModel, boolean)} instead.
+     */
+    @Deprecated(since = "26.4", forRemoval = true)
+    default AuthenticatedClientSessionModel getClientSession(UserSessionModel userSession, ClientModel client, String clientSessionId, boolean offline) {
+        return getClientSession(userSession, client, offline);
+    }
+
+    /**
+     * Gets the authenticated client session for a given user session and client.
+     *
+     * @param userSession The user's session model.
+     * @param client      The client model.
+     * @param offline     If {@code true}, retrieves the offline session; otherwise, retrieves the online session.
+     * @return The authenticated client session, or {@code null} if it doesn't exist.
+     */
+    AuthenticatedClientSessionModel getClientSession(UserSessionModel userSession, ClientModel client, boolean offline);
 
     /**
      * @deprecated Use {@link #createUserSession(String, RealmModel, UserModel, String, String, String, boolean, String, String, UserSessionModel.SessionPersistenceState)} instead.
      */
+    @Deprecated(forRemoval = true)
     default UserSessionModel createUserSession(RealmModel realm, UserModel user, String loginUsername, String ipAddress, String authMethod, boolean rememberMe, String brokerSessionId, String brokerUserId) {
         return createUserSession(null, realm, user, loginUsername, ipAddress, authMethod, rememberMe, brokerSessionId,
                 brokerUserId, UserSessionModel.SessionPersistenceState.PERSISTENT);
@@ -139,17 +161,26 @@ public interface UserSessionProvider extends Provider {
 
     /**
      * Remove expired user sessions and client sessions in all the realms
+     *
+     * @deprecated to be removed without replacement. The providers are responsible for purging the expired entries
+     * themselves.
      */
-    void removeAllExpired();
+    @Deprecated(since = "26.5", forRemoval = true)
+    default void removeAllExpired() {
+    }
 
     /**
-     * Removes expired user sessions owned by this realm from this provider.
-     * If this `UserSessionProvider` uses `UserSessionPersister`, the removal of the expired
-     * {@link UserSessionModel user sessions} is also propagated to relevant `UserSessionPersister`.
+     * Removes expired user sessions owned by this realm from this provider. If this `UserSessionProvider` uses
+     * `UserSessionPersister`, the removal of the expired {@link UserSessionModel user sessions} is also propagated to
+     * relevant `UserSessionPersister`.
      *
      * @param realm {@link RealmModel} Realm where all the expired user sessions to be removed from.
+     * @deprecated to be removed without replacement. The providers are responsible for purging the expired entries
+     * themselves.
      */
-    void removeExpired(RealmModel realm);
+    @Deprecated(since = "26.5", forRemoval = true)
+    default void removeExpired(RealmModel realm) {
+    }
 
     /**
      * Removes all user sessions (regular and offline) from the specified realm.
@@ -221,7 +252,7 @@ public interface UserSessionProvider extends Provider {
      *
      * @deprecated Deprecated as offline session preloading was removed in KC25. This method will be removed in KC27.
      */
-    @Deprecated(forRemoval = true)
+    @Deprecated(since = "26.4", forRemoval = true)
     default void importUserSessions(Collection<UserSessionModel> persistentUserSessions, boolean offline) {}
 
     void close();

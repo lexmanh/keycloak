@@ -17,6 +17,15 @@
 
 package org.keycloak.jgroups.protocol;
 
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+import org.keycloak.connections.jpa.JpaConnectionProviderFactory;
+
 import org.jgroups.Address;
 import org.jgroups.Event;
 import org.jgroups.PhysicalAddress;
@@ -28,14 +37,6 @@ import org.jgroups.util.ExtendedUUID;
 import org.jgroups.util.NameCache;
 import org.jgroups.util.Responses;
 import org.jgroups.util.UUID;
-import org.keycloak.connections.jpa.JpaConnectionProviderFactory;
-
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * Enhanced JDBC_PING2 to handle entries transactionally.
@@ -129,6 +130,8 @@ public class KEYCLOAK_JDBC_PING2 extends JDBC_PING2 {
             try {
                 List<PingData> pingData = readFromDB(cluster_name);
                 PhysicalAddress physical_addr = (PhysicalAddress) down(new Event(Event.GET_PHYSICAL_ADDRESS, local_addr));
+                // Sending the discovery here, as parent class will not execute it once there is data in the table
+                sendDiscoveryResponse(local_addr, physical_addr, NameCache.get(local_addr), null, is_coord);
                 PingData coord_data = new PingData(local_addr, true, NameCache.get(local_addr), physical_addr).coord(is_coord);
                 write(Collections.singletonList(coord_data), cluster_name);
                 while (pingData.stream().noneMatch(PingData::isCoord)) {
@@ -161,6 +164,8 @@ public class KEYCLOAK_JDBC_PING2 extends JDBC_PING2 {
                         // Always use a transaction for the delete+insert to make it atomic
                         // to avoid the short moment where there is no entry in the table.
                         connection.setAutoCommit(false);
+                    } else {
+                        log.warn("Autocommit is disabled. This indicates a transaction context that might batch statements and can lead to deadlocks.");
                     }
                     delete(connection, clustername, data.getAddress());
                     insert(connection, data, clustername);
@@ -241,5 +246,60 @@ public class KEYCLOAK_JDBC_PING2 extends JDBC_PING2 {
 
     public void setJpaConnectionProviderFactory(JpaConnectionProviderFactory factory) {
         this.factory = Objects.requireNonNull(factory);
+    }
+
+    /**
+     * Detects a network partition and decides if the node belongs to the winning partition.
+     * <p>
+     * The algorithm performs the following steps
+     *
+     * <ul>
+     *     <li>Reads the data from the database</li>
+     *     <li>If an error occurs fetching the data, it returns {@link HealthStatus#ERROR}</li>
+     *     <li>Filters out non coordinator members</li>
+     *     <li>If no coordinator is found, it return {@link HealthStatus#NO_COORDINATOR}</li>
+     *     <li>If multiple coordinators are found, it compares them and uses the coordinator with the lowest {@link UUID}</li>
+     *     <li>Finally, it compares if the coordinator is the same as the current view coordinator. If so, it returns {@link HealthStatus#HEALTHY}, otherwise {@link HealthStatus#UNHEALTHY}</li>
+     * </ul>
+     *
+     * @return The {@link HealthStatus}.
+     * @see HealthStatus
+     */
+    public HealthStatus healthStatus() {
+        try {
+            // maybe create an index, and a query to return coordinators only?
+            return readFromDB(cluster_name)
+                    .stream()
+                    .filter(PingData::isCoord)
+                    .map(PingData::getAddress)
+                    .sorted()
+                    .findFirst()
+                    .map(view.getCoord()::equals)
+                    .map(isCoordinatorInView -> isCoordinatorInView ? HealthStatus.HEALTHY : HealthStatus.UNHEALTHY)
+                    .orElse(HealthStatus.NO_COORDINATOR);
+        } catch (Exception e) {
+            // database failed?
+            log.warn("Failed to fetch the cluster members from the database.", e);
+            return HealthStatus.ERROR;
+        }
+    }
+
+    public enum HealthStatus {
+        /**
+         * No partition detected or this instance is in the right partition.
+         */
+        HEALTHY,
+        /**
+         * Partition detected and this instance is not in the right partition. It should stop handling requests.
+         */
+        UNHEALTHY,
+        /**
+         * No coordinator present in the database table.
+         */
+        NO_COORDINATOR,
+        /**
+         * If an error occurs when reading from the database.
+         */
+        ERROR
     }
 }

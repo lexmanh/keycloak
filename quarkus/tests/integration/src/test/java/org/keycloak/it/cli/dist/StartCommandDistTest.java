@@ -17,27 +17,28 @@
 
 package org.keycloak.it.cli.dist;
 
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.keycloak.quarkus.runtime.cli.command.AbstractStartCommand.OPTIMIZED_BUILD_OPTION_LONG;
-import static org.keycloak.quarkus.runtime.cli.command.Main.CONFIG_FILE_LONG_NAME;
+import org.keycloak.it.junit5.extension.CLIResult;
+import org.keycloak.it.junit5.extension.DistributionTest;
+import org.keycloak.it.junit5.extension.DryRun;
+import org.keycloak.it.junit5.extension.RawDistOnly;
+import org.keycloak.it.junit5.extension.WithEnvVars;
+import org.keycloak.it.utils.KeycloakDistribution;
 
+import io.quarkus.test.junit.main.Launch;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
-import org.keycloak.it.junit5.extension.CLIResult;
-import org.keycloak.it.junit5.extension.DistributionTest;
-import org.keycloak.it.junit5.extension.DryRun;
 
-import io.quarkus.test.junit.main.Launch;
-import org.keycloak.it.junit5.extension.RawDistOnly;
-import org.keycloak.it.junit5.extension.WithEnvVars;
-import org.keycloak.it.utils.KeycloakDistribution;
+import static org.keycloak.quarkus.runtime.cli.command.AbstractAutoBuildCommand.OPTIMIZED_BUILD_OPTION_LONG;
+import static org.keycloak.quarkus.runtime.cli.command.Main.CONFIG_FILE_LONG_NAME;
+
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @WithEnvVars({"KC_CACHE", "local"}) // avoid flakey port conflicts
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -92,6 +93,23 @@ public class StartCommandDistTest {
         cliResult.assertNoError("The following build time options");
     }
 
+    @Test
+    @RawDistOnly(reason = "Containers are immutable")
+    void terminateStartOptimized(KeycloakDistribution dist) {
+        CLIResult cliResult = dist.run("build", "--db=dev-file");
+        cliResult.assertBuild();
+
+        dist.setManualStop(true);
+        cliResult = dist.run("start", "--optimized", "--http-enabled=true", "--hostname-strict=false");
+        cliResult.assertStarted();
+
+        // if the child java process does not clean up, then subsequent start will fail
+        dist.stop();
+
+        cliResult = dist.run("start", "--optimized", "--http-enabled=true", "--hostname-strict=false");
+        cliResult.assertStarted();
+    }
+
     @DryRun
     @Test
     @Launch({ "--profile=dev", "start",  "--db=dev-file" })
@@ -104,13 +122,6 @@ public class StartCommandDistTest {
     @Launch({ "-v", "start", "--db=dev-file", "--http-enabled=true", "--hostname-strict=false" })
     void testHttpEnabled(CLIResult cliResult) {
         cliResult.assertStarted();
-    }
-
-    @DryRun
-    @Test
-    @Launch({ "-v", "start", "--db=dev-mem", OPTIMIZED_BUILD_OPTION_LONG})
-    void failBuildPropertyNotAvailable(CLIResult cliResult) {
-        cliResult.assertError("Build time option: '--db' not usable with pre-built image and --optimized");
     }
 
     @DryRun
@@ -158,13 +169,6 @@ public class StartCommandDistTest {
         cliResult.assertMessage(KeycloakDistribution.SCRIPT_CMD + " start --http-enabled=true --hostname-strict=false " + OPTIMIZED_BUILD_OPTION_LONG);
         assertFalse(cliResult.getOutput().contains("--metrics-enabled"));
         assertTrue(cliResult.getErrorOutput().isBlank(), cliResult.getErrorOutput());
-    }
-
-    @DryRun
-    @Test
-    @Launch({ "start", "--optimized", "--http-enabled=true", "--hostname-strict=false", "--db=postgres" })
-    void testStartUsingOptimizedDoesNotAllowBuildOptions(CLIResult cliResult) {
-        cliResult.assertError("Build time option: '--db' not usable with pre-built image and --optimized");
     }
 
     @DryRun

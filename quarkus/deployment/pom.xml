@@ -11,6 +11,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <name>Keycloak Quarkus Server Deployment</name>
+    <description>Keycloak Quarkus Server Deployment</description>
+
     <artifactId>keycloak-quarkus-server-deployment</artifactId>
 
     <dependencies>
@@ -138,6 +140,10 @@
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-hibernate-validator-deployment</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
             <artifactId>quarkus-hibernate-orm-deployment</artifactId>
             <exclusions>
                 <exclusion>
@@ -155,6 +161,14 @@
                 <exclusion>
                     <groupId>io.quarkus</groupId>
                     <artifactId>quarkus-agroal-dev</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.quarkus</groupId>
+                    <artifactId>quarkus-assistant-dev</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.quarkus</groupId>
+                    <artifactId>quarkus-hibernate-orm-dev</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
@@ -225,6 +239,14 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-health-deployment</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-smallrye-openapi-deployment</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-swagger-ui-deployment</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>

@@ -19,13 +19,8 @@ package org.keycloak.testsuite.webauthn.passwordless;
 
 import java.io.Closeable;
 import java.util.List;
-import org.hamcrest.MatcherAssert;
-import org.hamcrest.Matchers;
-import static org.hamcrest.Matchers.nullValue;
-import org.jboss.arquillian.graphene.page.Page;
-import org.junit.Test;
+
 import org.keycloak.WebAuthnConstants;
-import org.keycloak.common.Profile;
 import org.keycloak.events.Details;
 import org.keycloak.models.Constants;
 import org.keycloak.models.UserModel;
@@ -33,8 +28,7 @@ import org.keycloak.models.credential.WebAuthnCredentialModel;
 import org.keycloak.models.utils.TimeBasedOTP;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
-import org.keycloak.testsuite.admin.AbstractAdminTest;
-import org.keycloak.testsuite.arquillian.annotation.EnableFeature;
+import org.keycloak.testsuite.AbstractAdminTest;
 import org.keycloak.testsuite.arquillian.annotation.IgnoreBrowserDriver;
 import org.keycloak.testsuite.auth.page.login.OneTimeCode;
 import org.keycloak.testsuite.pages.LoginConfigTotpPage;
@@ -42,14 +36,20 @@ import org.keycloak.testsuite.pages.LoginTotpPage;
 import org.keycloak.testsuite.util.WaitUtils;
 import org.keycloak.testsuite.webauthn.AbstractWebAuthnVirtualTest;
 import org.keycloak.testsuite.webauthn.authenticators.DefaultVirtualAuthOptions;
+
+import org.hamcrest.MatcherAssert;
+import org.hamcrest.Matchers;
+import org.jboss.arquillian.graphene.page.Page;
+import org.junit.Test;
 import org.openqa.selenium.By;
 import org.openqa.selenium.firefox.FirefoxDriver;
+
+import static org.hamcrest.Matchers.nullValue;
 
 /**
  *
  * @author rmartinc
  */
-@EnableFeature(value = Profile.Feature.PASSKEYS, skipRestart = true)
 @IgnoreBrowserDriver(FirefoxDriver.class) // See https://github.com/keycloak/keycloak/issues/10368
 public class PasskeysDefaultBrowserFlowTest extends AbstractWebAuthnVirtualTest {
 

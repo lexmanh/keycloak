@@ -17,15 +17,6 @@
 
 package org.keycloak.organization.jpa;
 
-import static org.keycloak.models.OrganizationModel.ORGANIZATION_DOMAIN_ATTRIBUTE;
-import static org.keycloak.models.UserModel.EMAIL;
-import static org.keycloak.models.UserModel.FIRST_NAME;
-import static org.keycloak.models.UserModel.LAST_NAME;
-import static org.keycloak.models.UserModel.USERNAME;
-import static org.keycloak.models.jpa.PaginationUtils.paginateQuery;
-import static org.keycloak.organization.utils.Organizations.isReadOnlyOrganizationMember;
-import static org.keycloak.utils.StreamsUtil.closing;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -42,8 +33,10 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+
 import org.keycloak.connections.jpa.JpaConnectionProvider;
 import org.keycloak.models.GroupModel;
 import org.keycloak.models.GroupModel.Type;
@@ -66,12 +59,22 @@ import org.keycloak.models.jpa.entities.UserEntity;
 import org.keycloak.models.jpa.entities.UserGroupMembershipEntity;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.models.utils.ReadOnlyUserModelDelegate;
+import org.keycloak.organization.InvitationManager;
 import org.keycloak.organization.OrganizationProvider;
-import org.keycloak.representations.idm.MembershipType;
 import org.keycloak.organization.utils.Organizations;
+import org.keycloak.representations.idm.MembershipType;
 import org.keycloak.storage.StorageId;
 import org.keycloak.utils.ReservedCharValidator;
 import org.keycloak.utils.StringUtil;
+
+import static org.keycloak.models.OrganizationModel.ORGANIZATION_DOMAIN_ATTRIBUTE;
+import static org.keycloak.models.UserModel.EMAIL;
+import static org.keycloak.models.UserModel.FIRST_NAME;
+import static org.keycloak.models.UserModel.LAST_NAME;
+import static org.keycloak.models.UserModel.USERNAME;
+import static org.keycloak.models.jpa.PaginationUtils.paginateQuery;
+import static org.keycloak.organization.utils.Organizations.isReadOnlyOrganizationMember;
+import static org.keycloak.utils.StreamsUtil.closing;
 
 public class JpaOrganizationProvider implements OrganizationProvider {
 
@@ -79,12 +82,14 @@ public class JpaOrganizationProvider implements OrganizationProvider {
     private final GroupProvider groupProvider;
     private final UserProvider userProvider;
     private final KeycloakSession session;
+    private final JpaInvitationManager invitationManager;
 
     public JpaOrganizationProvider(KeycloakSession session) {
         this.session = session;
         em = session.getProvider(JpaConnectionProvider.class).getEntityManager();
         groupProvider = session.groups();
         userProvider = session.users();
+        invitationManager = new JpaInvitationManager(session, em);
     }
 
     @Override
@@ -302,26 +307,28 @@ public class JpaOrganizationProvider implements OrganizationProvider {
 
     private Predicate buildStringSearchPredicate(CriteriaBuilder builder, CriteriaQuery<?> query, Root<OrganizationEntity> org, String search,
                                                  Boolean exact) {
-        Root<OrganizationDomainEntity> domain = query.from(OrganizationDomainEntity.class);
-
         List<Predicate> predicates = new ArrayList<>();
         RealmModel realm = getRealm();
-        predicates.add(builder.equal(org.get("realmId"), realm.getId()));
-        predicates.add(builder.equal(org.get("id"), domain.get("organization").get("id")));
+        Predicate realmPredicate = builder.equal(org.get("realmId"), realm.getId());
 
+        if (StringUtil.isBlank(search)) {
+            return realmPredicate;
+        }
+
+        predicates.add(realmPredicate);
+
+        Join<OrganizationEntity, OrganizationDomainEntity> domain = org.join("domains", JoinType.LEFT);
         Predicate namePredicate;
         Predicate domainPredicate;
-        if (StringUtil.isBlank(search)) {
-            namePredicate = builder.conjunction();  // constant true
-            domainPredicate = builder.conjunction();
 
-        } else if (Boolean.TRUE.equals(exact)) {
+        if (Boolean.TRUE.equals(exact)) {
             namePredicate = builder.equal(org.get("name"), search);
             domainPredicate = builder.equal(domain.get("name"), search);
         } else {
             namePredicate = builder.like(builder.lower(org.get("name")), "%" + search.toLowerCase() + "%");
             domainPredicate = builder.like(domain.get("name"), "%" + search.toLowerCase() + "%");
         }
+
         predicates.add(builder.or(namePredicate, domainPredicate));
 
         return builder.and(predicates.toArray(new Predicate[0]));
@@ -598,6 +605,11 @@ public class JpaOrganizationProvider implements OrganizationProvider {
     @Override
     public boolean isEnabled() {
         return getRealm().isOrganizationsEnabled();
+    }
+
+    @Override
+    public InvitationManager getInvitationManager() {
+        return invitationManager;
     }
 
     @Override

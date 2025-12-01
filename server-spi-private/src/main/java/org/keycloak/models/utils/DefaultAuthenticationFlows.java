@@ -17,6 +17,12 @@
 
 package org.keycloak.models.utils;
 
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
 import org.keycloak.Config;
 import org.keycloak.common.Profile;
 import org.keycloak.common.Profile.Feature;
@@ -27,12 +33,6 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.RequiredCredentialModel;
 import org.keycloak.models.credential.WebAuthnCredentialModel;
 import org.keycloak.representations.idm.IdentityProviderRepresentation;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.LinkedList;
 
 
 /**
@@ -375,19 +375,21 @@ public class DefaultAuthenticationFlows {
         execution.setAuthenticatorFlow(false);
         realm.addAuthenticatorExecution(execution);
 
-        AuthenticatorConfigModel configModel = new AuthenticatorConfigModel();
-        configModel.setAlias("browser-conditional-credential");
-        configModel.setConfig(Map.of("credentials", WebAuthnCredentialModel.TYPE_PASSWORDLESS));
-        configModel = realm.addAuthenticatorConfig(configModel);
+        if (Profile.isFeatureEnabled(Profile.Feature.PASSKEYS)) {
+            AuthenticatorConfigModel configModel = new AuthenticatorConfigModel();
+            configModel.setAlias("browser-conditional-credential");
+            configModel.setConfig(Map.of("credentials", WebAuthnCredentialModel.TYPE_PASSWORDLESS));
+            configModel = realm.addAuthenticatorConfig(configModel);
 
-        execution = new AuthenticationExecutionModel();
-        execution.setParentFlow(conditionalOTP.getId());
-        execution.setRequirement(AuthenticationExecutionModel.Requirement.REQUIRED);
-        execution.setAuthenticator("conditional-credential");
-        execution.setPriority(20);
-        execution.setAuthenticatorFlow(false);
-        execution.setAuthenticatorConfig(configModel.getId());
-        realm.addAuthenticatorExecution(execution);
+            execution = new AuthenticationExecutionModel();
+            execution.setParentFlow(conditionalOTP.getId());
+            execution.setRequirement(AuthenticationExecutionModel.Requirement.REQUIRED);
+            execution.setAuthenticator("conditional-credential");
+            execution.setPriority(20);
+            execution.setAuthenticatorFlow(false);
+            execution.setAuthenticatorConfig(configModel.getId());
+            realm.addAuthenticatorExecution(execution);
+        }
 
         // otp processing
         execution = new AuthenticationExecutionModel();
@@ -504,6 +506,15 @@ public class DefaultAuthenticationFlows {
         execution.setAuthenticatorFlow(false);
         realm.addAuthenticatorExecution(execution);
 
+        if (Profile.isFeatureEnabled(Feature.CLIENT_AUTH_FEDERATED)) {
+            execution = new AuthenticationExecutionModel();
+            execution.setParentFlow(clients.getId());
+            execution.setRequirement(AuthenticationExecutionModel.Requirement.ALTERNATIVE);
+            execution.setAuthenticator("federated-jwt");
+            execution.setPriority(50);
+            execution.setAuthenticatorFlow(false);
+            realm.addAuthenticatorExecution(execution);
+        }
     }
 
     public static void firstBrokerLoginFlow(RealmModel realm, boolean migrate) {
@@ -676,19 +687,21 @@ public class DefaultAuthenticationFlows {
         execution.setAuthenticatorFlow(false);
         realm.addAuthenticatorExecution(execution);
 
-        AuthenticatorConfigModel configModel = new AuthenticatorConfigModel();
-        configModel.setAlias("first-broker-login-conditional-credential");
-        configModel.setConfig(Map.of("credentials", WebAuthnCredentialModel.TYPE_PASSWORDLESS));
-        configModel = realm.addAuthenticatorConfig(configModel);
+        if (Profile.isFeatureEnabled(Profile.Feature.PASSKEYS)) {
+            AuthenticatorConfigModel configModel = new AuthenticatorConfigModel();
+            configModel.setAlias("first-broker-login-conditional-credential");
+            configModel.setConfig(Map.of("credentials", WebAuthnCredentialModel.TYPE_PASSWORDLESS));
+            configModel = realm.addAuthenticatorConfig(configModel);
 
-        execution = new AuthenticationExecutionModel();
-        execution.setParentFlow(conditionalOTP.getId());
-        execution.setRequirement(AuthenticationExecutionModel.Requirement.REQUIRED);
-        execution.setAuthenticator("conditional-credential");
-        execution.setPriority(20);
-        execution.setAuthenticatorFlow(false);
-        execution.setAuthenticatorConfig(configModel.getId());
-        realm.addAuthenticatorExecution(execution);
+            execution = new AuthenticationExecutionModel();
+            execution.setParentFlow(conditionalOTP.getId());
+            execution.setRequirement(AuthenticationExecutionModel.Requirement.REQUIRED);
+            execution.setAuthenticator("conditional-credential");
+            execution.setPriority(20);
+            execution.setAuthenticatorFlow(false);
+            execution.setAuthenticatorConfig(configModel.getId());
+            realm.addAuthenticatorExecution(execution);
+        }
 
         execution = new AuthenticationExecutionModel();
         execution.setParentFlow(conditionalOTP.getId());

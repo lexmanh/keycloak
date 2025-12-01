@@ -19,20 +19,14 @@ package org.keycloak.testsuite.webauthn.passwordless;
 
 import java.io.IOException;
 import java.util.Optional;
-import org.jboss.arquillian.graphene.page.Page;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+
 import org.keycloak.admin.client.resource.AuthenticationManagementResource;
 import org.keycloak.authentication.requiredactions.WebAuthnPasswordlessRegisterFactory;
-import org.keycloak.common.Profile;
 import org.keycloak.models.IdentityProviderSyncMode;
 import org.keycloak.representations.idm.IdentityProviderRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.RequiredActionProviderRepresentation;
 import org.keycloak.testsuite.admin.ApiUtil;
-import org.keycloak.testsuite.arquillian.annotation.EnableFeature;
 import org.keycloak.testsuite.arquillian.annotation.IgnoreBrowserDriver;
 import org.keycloak.testsuite.broker.AbstractBrokerTest;
 import org.keycloak.testsuite.broker.AbstractInitializedBaseBrokerTest;
@@ -52,6 +46,12 @@ import org.keycloak.testsuite.webauthn.authenticators.VirtualAuthenticatorManage
 import org.keycloak.testsuite.webauthn.pages.WebAuthnErrorPage;
 import org.keycloak.testsuite.webauthn.pages.WebAuthnLoginPage;
 import org.keycloak.testsuite.webauthn.pages.WebAuthnRegisterPage;
+
+import org.jboss.arquillian.graphene.page.Page;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
 import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.firefox.FirefoxDriver;
 
@@ -59,7 +59,6 @@ import org.openqa.selenium.firefox.FirefoxDriver;
  *
  * @author rmartinc
  */
-@EnableFeature(value = Profile.Feature.PASSKEYS, skipRestart = true)
 @IgnoreBrowserDriver(FirefoxDriver.class) // See https://github.com/keycloak/keycloak/issues/10368
 public class PasskeysKcOidcFirstBrokerLoginTest extends AbstractInitializedBaseBrokerTest {
 

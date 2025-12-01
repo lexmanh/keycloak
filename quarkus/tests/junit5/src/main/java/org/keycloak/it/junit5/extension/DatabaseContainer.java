@@ -20,13 +20,14 @@ package org.keycloak.it.junit5.extension;
 import java.time.Duration;
 
 import org.keycloak.it.utils.KeycloakDistribution;
+
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.JdbcDatabaseContainer;
 import org.testcontainers.containers.MSSQLServerContainer;
 import org.testcontainers.containers.MariaDBContainer;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.images.PullPolicy;
+import org.testcontainers.tidb.TiDBContainer;
 import org.testcontainers.utility.DockerImageName;
 
 public class DatabaseContainer {
@@ -95,6 +96,7 @@ public class DatabaseContainer {
         String MARIADB_IMAGE = System.getProperty("kc.db.mariadb.container.image");
         String MYSQL_IMAGE = System.getProperty("kc.db.mysql.container.image");
         String MSSQL_IMAGE = System.getProperty("kc.db.mssql.container.image");
+        String TIDB_IMAGE = System.getProperty("kc.db.tidb.container.image");
 
         switch (alias) {
             case "postgres":
@@ -109,6 +111,9 @@ public class DatabaseContainer {
             case "mssql":
                 DockerImageName MSSQL = DockerImageName.parse(MSSQL_IMAGE).asCompatibleSubstituteFor("sqlserver");
                 return configureJdbcContainer(new MSSQLServerContainer<>(MSSQL));
+            case "tidb":
+                DockerImageName TIDB = DockerImageName.parse(TIDB_IMAGE).asCompatibleSubstituteFor("pingcap/tidb");
+                return configureJdbcContainer(new TiDBContainer(TIDB));
             default:
                 throw new RuntimeException("Unsupported database: " + alias);
         }

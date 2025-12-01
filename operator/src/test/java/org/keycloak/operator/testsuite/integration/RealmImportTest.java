@@ -138,7 +138,7 @@ public class RealmImportTest extends BaseOperatorTest {
         k8sclient.getKubernetesSerialization().registerKubernetesResource(KeycloakRealmImport.class);
         K8sUtils.set(k8sclient, getClass().getResourceAsStream("/example-realm.yaml"), obj -> {
             KeycloakRealmImport realmImport = (KeycloakRealmImport) obj;
-            realmImport.getSpec().getRealm().setSmtpServer(Map.of("port", "${MY_SMTP_PORT}", "host", "${MY_SMTP_SERVER}"));
+            realmImport.getSpec().getRealm().setSmtpServer(Map.of("port", "${MY_SMTP_PORT}", "host", "${MY_SMTP_SERVER}", "from", "admin@keycloak.org"));
             realmImport.getSpec().setPlaceholders(Map.of("MY_SMTP_PORT", new Placeholder(new SecretKeySelectorBuilder().withName("keycloak-smtp-secret").withKey("SMTP_PORT").build()),
                             "MY_SMTP_SERVER", new Placeholder(new SecretKeySelectorBuilder().withName("keycloak-smtp-secret").withKey("SMTP_SERVER").build())));
             return realmImport;
@@ -151,7 +151,7 @@ public class RealmImportTest extends BaseOperatorTest {
         assertThat(envvars.stream().filter(e -> e.getName().equals("MY_SMTP_SERVER")).findAny().get().getValueFrom().getSecretKeyRef().getKey()).isEqualTo("SMTP_SERVER");
     }
 
-    private List<EnvVar> assertWorkingRealmImport(Keycloak kc) {
+    private void waitForRealmImport(Keycloak kc) {
         var crSelector = k8sclient
                 .resources(KeycloakRealmImport.class)
                 .inNamespace(namespace)
@@ -177,6 +177,10 @@ public class RealmImportTest extends BaseOperatorTest {
                     CRAssert.assertKeycloakRealmImportStatusCondition(cr, STARTED, false);
                     CRAssert.assertKeycloakRealmImportStatusCondition(cr, HAS_ERRORS, false);
                 });
+    }
+
+    private List<EnvVar> assertWorkingRealmImport(Keycloak kc) {
+        waitForRealmImport(kc);
         var job = k8sclient.batch().v1().jobs().inNamespace(namespace).withName("example-count0-kc").get();
         assertThat(job.getSpec().getTemplate().getMetadata().getLabels().get("app")).isEqualTo("keycloak-realm-import");
         var container = job.getSpec().getTemplate().getSpec().getContainers().get(0);
@@ -202,6 +206,7 @@ public class RealmImportTest extends BaseOperatorTest {
         });
 
         assertThat(getJobArgs()).contains("build");
+        assertThat(job.getMetadata().getLabels().get("example")).isEqualTo("test");
 
         return envvars;
     }

@@ -20,10 +20,11 @@ package org.keycloak.quarkus.runtime;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.jboss.logging.Logger;
 
-import org.keycloak.quarkus.runtime.cli.command.AbstractStartCommand;
+import org.keycloak.quarkus.runtime.cli.command.AbstractAutoBuildCommand;
 import org.keycloak.quarkus.runtime.cli.command.Build;
+
+import org.jboss.logging.Logger;
 import picocli.CommandLine;
 
 public final class Messages {
@@ -49,7 +50,7 @@ public final class Messages {
     }
 
     public static String optimizedUsedForFirstStartup() {
-        return String.format("The '%s' flag was used for first ever server start. Please don't use this flag for the first startup or use '%s %s' to build the server first.", AbstractStartCommand.OPTIMIZED_BUILD_OPTION_LONG, Environment.getCommand(), Build.NAME);
+        return String.format("The '%s' flag was used for first ever server start. Please don't use this flag for the first startup or use '%s %s' to build the server first.", AbstractAutoBuildCommand.OPTIMIZED_BUILD_OPTION_LONG, Environment.getCommand(), Build.NAME);
     }
 
     public static String invalidLogLevel(String logLevel) {

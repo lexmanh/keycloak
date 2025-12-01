@@ -17,19 +17,19 @@
 
 package org.keycloak.services.util;
 
-import org.keycloak.models.ClientModel;
-import org.keycloak.models.utils.KeycloakModelUtils;
-import org.keycloak.representations.idm.CertificateRepresentation;
-import org.keycloak.representations.idm.ClientRepresentation;
-
 import java.io.IOException;
 import java.security.PublicKey;
 import java.util.HashMap;
+
 import org.keycloak.jose.jwk.JSONWebKeySet;
 import org.keycloak.jose.jwk.JWK;
 import org.keycloak.jose.jwk.JWKParser;
+import org.keycloak.models.ClientModel;
+import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.protocol.oidc.OIDCConfigAttributes;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
+import org.keycloak.representations.idm.CertificateRepresentation;
+import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.util.JWKSUtils;
 import org.keycloak.util.JsonSerialization;
 
@@ -75,6 +75,9 @@ public class CertificateInfoHelper {
 
         try {
             JSONWebKeySet keySet = JsonSerialization.readValue(jwks, JSONWebKeySet.class);
+            if (keySet == null || keySet.getKeys() == null) {
+                throw new IllegalStateException("Certificate not found");
+            }
             JWK publicKeyJwk = JWKSUtils.getKeyForUse(keySet, JWK.Use.SIG);
             if (publicKeyJwk == null) {
                 throw new IllegalStateException("Certificate not found for use sig");

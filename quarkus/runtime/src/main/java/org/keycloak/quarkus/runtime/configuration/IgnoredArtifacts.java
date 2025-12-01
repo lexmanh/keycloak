@@ -16,9 +16,6 @@
  */
 package org.keycloak.quarkus.runtime.configuration;
 
-import static java.util.Collections.emptySet;
-import static org.keycloak.quarkus.runtime.Environment.getCurrentOrCreateFeatureProfile;
-
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -29,6 +26,10 @@ import org.keycloak.common.Profile;
 import org.keycloak.config.HealthOptions;
 import org.keycloak.config.MetricsOptions;
 import org.keycloak.config.database.Database;
+
+import static java.util.Collections.emptySet;
+
+import static org.keycloak.quarkus.runtime.Environment.getCurrentOrCreateFeatureProfile;
 
 /**
  * Ignore particular artifacts based on build configuration
@@ -133,7 +134,7 @@ public class IgnoredArtifacts {
         final Set<String> jdbcArtifacts = vendorsOfAllDatasources.stream()
                 .map(vendor -> switch (vendor) {
                     case H2 -> JDBC_H2;
-                    case MYSQL -> JDBC_MYSQL;
+                    case MYSQL, TIDB -> JDBC_MYSQL;
                     case MARIADB -> JDBC_MARIADB;
                     case POSTGRES -> JDBC_POSTGRES;
                     case MSSQL -> JDBC_MSSQL;

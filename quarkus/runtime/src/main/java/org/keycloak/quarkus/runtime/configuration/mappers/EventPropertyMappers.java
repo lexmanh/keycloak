@@ -1,5 +1,7 @@
 package org.keycloak.quarkus.runtime.configuration.mappers;
 
+import java.util.List;
+
 import org.keycloak.common.Profile;
 
 import static org.keycloak.config.EventOptions.USER_EVENT_METRICS_ENABLED;
@@ -11,12 +13,11 @@ import static org.keycloak.quarkus.runtime.configuration.mappers.MetricsProperty
 import static org.keycloak.quarkus.runtime.configuration.mappers.PropertyMapper.fromOption;
 
 
-final class EventPropertyMappers {
+final class EventPropertyMappers implements PropertyMapperGrouping {
 
-    private EventPropertyMappers(){}
-
-    public static PropertyMapper<?>[] getMetricsPropertyMappers() {
-        return new PropertyMapper[] {
+    @Override
+    public List<PropertyMapper<?>> getPropertyMappers() {
+        return List.of(
                 fromOption(USER_EVENT_METRICS_ENABLED)
                         .to("kc.spi-events-listener--micrometer-user-event-metrics--enabled")
                         .isEnabled(EventPropertyMappers::userEventsMetricsEnabled, METRICS_ENABLED_MSG + " and feature " + Profile.Feature.USER_EVENT_METRICS.getKey() + " is enabled")
@@ -30,8 +31,8 @@ final class EventPropertyMappers {
                         .to("kc.spi-events-listener--micrometer-user-event-metrics--events")
                         .paramLabel("events")
                         .isEnabled(EventPropertyMappers::userEventsMetricsTags, "user event metrics are enabled")
-                        .build(),
-        };
+                        .build()
+        );
     }
 
     private static boolean userEventsMetricsEnabled() {

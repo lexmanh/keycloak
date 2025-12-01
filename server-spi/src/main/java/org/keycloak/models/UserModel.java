@@ -17,14 +17,14 @@
 
 package org.keycloak.models;
 
-import static org.keycloak.utils.StringUtil.isNotBlank;
-
-import org.keycloak.provider.ProviderEvent;
-
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+
+import org.keycloak.provider.ProviderEvent;
+
+import static org.keycloak.utils.StringUtil.isNotBlank;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
@@ -35,6 +35,7 @@ public interface UserModel extends RoleMapperModel {
     String FIRST_NAME = "firstName";
     String LAST_NAME = "lastName";
     String EMAIL = "email";
+    String EMAIL_PENDING = "kc.email.pending";
     String EMAIL_VERIFIED = "emailVerified";
     String LOCALE = "locale";
     String ENABLED = "enabled";

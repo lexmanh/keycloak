@@ -31,7 +31,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.jboss.logging.Logger;
 import org.keycloak.authorization.UserManagedPermissionUtil;
 import org.keycloak.authorization.model.PermissionTicket;
 import org.keycloak.authorization.model.Policy;
@@ -80,6 +79,8 @@ import org.keycloak.models.cache.infinispan.entities.NonExistentItem;
 import org.keycloak.models.cache.infinispan.events.InvalidationEvent;
 import org.keycloak.representations.idm.authorization.AbstractPolicyRepresentation;
 import org.keycloak.storage.StorageId;
+
+import org.jboss.logging.Logger;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
@@ -825,9 +826,9 @@ public class StoreFactoryCacheSession implements CachedStoreFactoryProvider {
                 Set<String> resources = query.getResources();
 
                 if (consumer != null) {
-                    resources.stream().map(resourceId -> (R) findById(resourceServer, resourceId)).forEach(consumer);
+                    resources.stream().map(resourceId -> (R) findById(resourceServer, resourceId)).filter(Objects::nonNull).forEach(consumer);
                 } else {
-                    model = resources.stream().map(resourceId -> (R) findById(resourceServer, resourceId)).collect(Collectors.toList());
+                    model = resources.stream().map(resourceId -> (R) findById(resourceServer, resourceId)).filter(Objects::nonNull).collect(Collectors.toList());
                 }
             }
             

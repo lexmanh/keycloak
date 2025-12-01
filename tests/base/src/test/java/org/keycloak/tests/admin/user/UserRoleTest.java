@@ -1,7 +1,11 @@
 package org.keycloak.tests.admin.user;
 
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+
 import jakarta.ws.rs.core.Response;
-import org.junit.jupiter.api.Test;
+
 import org.keycloak.admin.client.resource.RealmResource;
 import org.keycloak.admin.client.resource.RoleMappingResource;
 import org.keycloak.events.admin.OperationType;
@@ -17,19 +21,18 @@ import org.keycloak.testframework.injection.LifeCycle;
 import org.keycloak.testframework.realm.ClientConfigBuilder;
 import org.keycloak.testframework.realm.GroupConfigBuilder;
 import org.keycloak.testframework.realm.ManagedRealm;
+import org.keycloak.testframework.realm.RoleConfigBuilder;
 import org.keycloak.testframework.realm.UserConfigBuilder;
+import org.keycloak.testframework.util.ApiUtil;
 import org.keycloak.tests.utils.admin.AdminEventPaths;
-import org.keycloak.tests.utils.admin.ApiUtil;
-import org.keycloak.testsuite.util.RoleBuilder;
 
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
+import org.junit.jupiter.api.Test;
+
+import static org.keycloak.tests.utils.Assert.assertNames;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.keycloak.tests.utils.Assert.assertNames;
 
 @KeycloakIntegrationTest
 public class UserRoleTest extends AbstractUserTest {
@@ -40,11 +43,11 @@ public class UserRoleTest extends AbstractUserTest {
     @Test
     public void roleMappings() {
         RealmResource realm = managedRealm.admin();
-        RoleRepresentation realmCompositeRole = RoleBuilder.create().name("realm-composite").singleAttribute("attribute1", "value1").build();
+        RoleRepresentation realmCompositeRole = RoleConfigBuilder.create().name("realm-composite").singleAttribute("attribute1", "value1").build();
 
-        realm.roles().create(RoleBuilder.create().name("realm-role").build());
+        realm.roles().create(RoleConfigBuilder.create().name("realm-role").build());
         realm.roles().create(realmCompositeRole);
-        realm.roles().create(RoleBuilder.create().name("realm-child").build());
+        realm.roles().create(RoleConfigBuilder.create().name("realm-child").build());
         realm.roles().get("realm-composite").addComposites(Collections.singletonList(realm.roles().get("realm-child").toRepresentation()));
 
         final String clientUuid;
@@ -52,13 +55,13 @@ public class UserRoleTest extends AbstractUserTest {
             clientUuid = ApiUtil.getCreatedId(response);
         }
 
-        RoleRepresentation clientCompositeRole = RoleBuilder.create().name("client-composite").singleAttribute("attribute1", "value1").build();
+        RoleRepresentation clientCompositeRole = RoleConfigBuilder.create().name("client-composite").singleAttribute("attribute1", "value1").build();
 
 
-        realm.clients().get(clientUuid).roles().create(RoleBuilder.create().name("client-role").build());
-        realm.clients().get(clientUuid).roles().create(RoleBuilder.create().name("client-role2").build());
+        realm.clients().get(clientUuid).roles().create(RoleConfigBuilder.create().name("client-role").build());
+        realm.clients().get(clientUuid).roles().create(RoleConfigBuilder.create().name("client-role2").build());
         realm.clients().get(clientUuid).roles().create(clientCompositeRole);
-        realm.clients().get(clientUuid).roles().create(RoleBuilder.create().name("client-child").build());
+        realm.clients().get(clientUuid).roles().create(RoleConfigBuilder.create().name("client-child").build());
         realm.clients().get(clientUuid).roles().get("client-composite").addComposites(Collections.singletonList(realm.clients().get(clientUuid).roles().get("client-child").toRepresentation()));
 
         final String userId;
@@ -139,23 +142,23 @@ public class UserRoleTest extends AbstractUserTest {
     public void rolesCanBeAssignedEvenWhenTheyAreAlreadyIndirectlyAssigned() {
         RealmResource realm = managedRealm.admin();
 
-        RoleRepresentation realmCompositeRole = RoleBuilder.create().name("realm-composite").build();
+        RoleRepresentation realmCompositeRole = RoleConfigBuilder.create().name("realm-composite").build();
         realm.roles().create(realmCompositeRole);
-        realm.roles().create(RoleBuilder.create().name("realm-child").build());
+        realm.roles().create(RoleConfigBuilder.create().name("realm-child").build());
         realm.roles().get("realm-composite")
                 .addComposites(Collections.singletonList(realm.roles().get("realm-child").toRepresentation()));
-        realm.roles().create(RoleBuilder.create().name("realm-role-in-group").build());
+        realm.roles().create(RoleConfigBuilder.create().name("realm-role-in-group").build());
 
         Response response = realm.clients().create(ClientConfigBuilder.create().clientId("myclient").build());
         String clientUuid = ApiUtil.getCreatedId(response);
         response.close();
 
-        RoleRepresentation clientCompositeRole = RoleBuilder.create().name("client-composite").build();
+        RoleRepresentation clientCompositeRole = RoleConfigBuilder.create().name("client-composite").build();
         realm.clients().get(clientUuid).roles().create(clientCompositeRole);
-        realm.clients().get(clientUuid).roles().create(RoleBuilder.create().name("client-child").build());
+        realm.clients().get(clientUuid).roles().create(RoleConfigBuilder.create().name("client-child").build());
         realm.clients().get(clientUuid).roles().get("client-composite").addComposites(Collections
                 .singletonList(realm.clients().get(clientUuid).roles().get("client-child").toRepresentation()));
-        realm.clients().get(clientUuid).roles().create(RoleBuilder.create().name("client-role-in-group").build());
+        realm.clients().get(clientUuid).roles().create(RoleConfigBuilder.create().name("client-role-in-group").build());
 
         GroupRepresentation group = GroupConfigBuilder.create().name("mygroup").build();
         response = realm.groups().add(group);

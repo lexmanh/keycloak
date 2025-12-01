@@ -17,11 +17,12 @@
 
 package org.keycloak.models.sessions.infinispan.query;
 
-import org.infinispan.client.hotrod.RemoteCache;
-import org.infinispan.commons.api.query.Query;
 import org.keycloak.marshalling.Marshalling;
 import org.keycloak.models.sessions.infinispan.entities.ClientSessionKey;
 import org.keycloak.models.sessions.infinispan.entities.RemoteAuthenticatedClientSessionEntity;
+
+import org.infinispan.client.hotrod.RemoteCache;
+import org.infinispan.commons.api.query.Query;
 
 /**
  * Util class with Infinispan Ickle Queries for {@link RemoteAuthenticatedClientSessionEntity}.
@@ -37,6 +38,7 @@ public final class ClientSessionQueries {
     private static final String PER_CLIENT_COUNT = "SELECT e.clientId, count(e.clientId) FROM %s as e GROUP BY e.clientId ORDER BY e.clientId".formatted(CLIENT_SESSION);
     private static final String CLIENT_SESSION_COUNT = "SELECT count(e) FROM %s as e WHERE e.realmId = :realmId && e.clientId = :clientId".formatted(CLIENT_SESSION);
     private static final String FROM_USER_SESSION = "FROM %s as e WHERE e.userSessionId = :userSessionId ORDER BY e.clientId".formatted(CLIENT_SESSION);
+    private static final String IDS_FROM_USER_SESSION = "SELECT e.clientId FROM %s as e WHERE e.userSessionId = :userSessionId ORDER BY e.clientId".formatted(CLIENT_SESSION);
 
     /**
      * Returns a projection with the user session ID for client sessions from the client {@code clientId}.
@@ -69,6 +71,16 @@ public final class ClientSessionQueries {
      */
     public static Query<RemoteAuthenticatedClientSessionEntity> fetchClientSessions(RemoteCache<ClientSessionKey, RemoteAuthenticatedClientSessionEntity> cache, String userSessionId) {
         return cache.<RemoteAuthenticatedClientSessionEntity>query(FROM_USER_SESSION)
+                .setParameter("userSessionId", userSessionId);
+    }
+
+    /**
+     * Returns a projection with the client IDs belonging to the user session.
+     * <p>
+     * The returned array contains a single {@link String} element with the client ID.
+     */
+    public static Query<Object[]> fetchClientSessionsIds(RemoteCache<ClientSessionKey, RemoteAuthenticatedClientSessionEntity> cache, String userSessionId) {
+        return cache.<Object[]>query(IDS_FROM_USER_SESSION)
                 .setParameter("userSessionId", userSessionId);
     }
 

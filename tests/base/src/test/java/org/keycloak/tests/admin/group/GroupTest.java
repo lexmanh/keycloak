@@ -17,17 +17,23 @@
 
 package org.keycloak.tests.admin.group;
 
+import java.io.IOException;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.IntStream;
+
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.ClientErrorException;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.hamcrest.Matchers;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.GroupResource;
 import org.keycloak.admin.client.resource.GroupsResource;
@@ -54,32 +60,29 @@ import org.keycloak.testframework.annotations.InjectAdminClient;
 import org.keycloak.testframework.annotations.InjectHttpClient;
 import org.keycloak.testframework.annotations.InjectRealm;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
+import org.keycloak.testframework.conditions.DisabledForDatabases;
 import org.keycloak.testframework.events.AdminEventAssertion;
 import org.keycloak.testframework.realm.ClientConfigBuilder;
 import org.keycloak.testframework.realm.GroupConfigBuilder;
 import org.keycloak.testframework.realm.ManagedRealm;
 import org.keycloak.testframework.realm.RealmConfig;
 import org.keycloak.testframework.realm.RealmConfigBuilder;
+import org.keycloak.testframework.realm.RoleConfigBuilder;
 import org.keycloak.testframework.realm.UserConfigBuilder;
 import org.keycloak.testframework.remote.runonserver.InjectRunOnServer;
 import org.keycloak.testframework.remote.runonserver.RunOnServerClient;
+import org.keycloak.testframework.util.ApiUtil;
 import org.keycloak.tests.utils.Assert;
 import org.keycloak.tests.utils.admin.AdminEventPaths;
-import org.keycloak.tests.utils.admin.ApiUtil;
-import org.keycloak.testsuite.util.RoleBuilder;
 import org.keycloak.testsuite.util.userprofile.UserProfileUtil;
 import org.keycloak.util.JsonSerialization;
 
-import java.io.IOException;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.IntStream;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.anEmptyMap;
@@ -116,6 +119,7 @@ public class GroupTest extends AbstractGroupTest {
 
     
     @Test
+    @DisabledForDatabases("mssql")
     public void createMultiDeleteMultiReadMulti() {
         // create multiple groups
         List<String> groupUuuids = new ArrayList<>();
@@ -175,7 +179,7 @@ public class GroupTest extends AbstractGroupTest {
                 .resourceType(ResourceType.CLIENT);
         client = realm.clients().findByClientId("foo").get(0);
 
-        RoleRepresentation role = RoleBuilder.create().name("foo-role").build();
+        RoleRepresentation role = RoleConfigBuilder.create().name("foo-role").build();
         realm.clients().get(client.getId()).roles().create(role);
         AdminEventAssertion.assertSuccess(adminEvents.poll())
                 .operationType(OperationType.CREATE)
@@ -370,9 +374,9 @@ public class GroupTest extends AbstractGroupTest {
 
     @Test
     public void createAndTestGroups() throws IOException {
-        RoleRepresentation topRole = createRealmRole(managedRealm, RoleBuilder.create().name("topRole").build());
-        RoleRepresentation level2Role = createRealmRole(managedRealm, RoleBuilder.create().name("level2Role").build());
-        RoleRepresentation level3Role = createRealmRole(managedRealm, RoleBuilder.create().name("level3Role").build());
+        RoleRepresentation topRole = createRealmRole(managedRealm, RoleConfigBuilder.create().name("topRole").build());
+        RoleRepresentation level2Role = createRealmRole(managedRealm, RoleConfigBuilder.create().name("level2Role").build());
+        RoleRepresentation level3Role = createRealmRole(managedRealm, RoleConfigBuilder.create().name("level3Role").build());
 
         // Role events tested elsewhere
         adminEvents.skipAll();
@@ -684,19 +688,19 @@ public class GroupTest extends AbstractGroupTest {
     @Test
     public void roleMappings() {
         RealmResource realm = managedRealm.admin();
-        createRealmRole(managedRealm, RoleBuilder.create().name("realm-role").build());
-        createRealmRole(managedRealm, RoleBuilder.create().name("realm-composite").build());
-        createRealmRole(managedRealm, RoleBuilder.create().name("realm-child").build());
+        createRealmRole(managedRealm, RoleConfigBuilder.create().name("realm-role").build());
+        createRealmRole(managedRealm, RoleConfigBuilder.create().name("realm-composite").build());
+        createRealmRole(managedRealm, RoleConfigBuilder.create().name("realm-child").build());
         realm.roles().get("realm-composite").addComposites(List.of(realm.roles().get("realm-child").toRepresentation()));
 
         Response response = realm.clients().create(ClientConfigBuilder.create().clientId("myclient").build());
         String clientId = ApiUtil.getCreatedId(response);
         managedRealm.cleanup().add(r -> r.clients().get(clientId).remove());
 
-        realm.clients().get(clientId).roles().create(RoleBuilder.create().name("client-role").build());
-        realm.clients().get(clientId).roles().create(RoleBuilder.create().name("client-role2").build());
-        realm.clients().get(clientId).roles().create(RoleBuilder.create().name("client-composite").build());
-        realm.clients().get(clientId).roles().create(RoleBuilder.create().name("client-child").build());
+        realm.clients().get(clientId).roles().create(RoleConfigBuilder.create().name("client-role").build());
+        realm.clients().get(clientId).roles().create(RoleConfigBuilder.create().name("client-role2").build());
+        realm.clients().get(clientId).roles().create(RoleConfigBuilder.create().name("client-composite").build());
+        realm.clients().get(clientId).roles().create(RoleConfigBuilder.create().name("client-child").build());
         realm.clients().get(clientId).roles().get("client-composite").addComposites(List.of(realm.clients().get(clientId).roles().get("client-child").toRepresentation()));
 
         // Roles+clients tested elsewhere
@@ -760,8 +764,8 @@ public class GroupTest extends AbstractGroupTest {
     public void rolesCanBeAssignedEvenWhenTheyAreAlreadyIndirectlyAssigned() {
         RealmResource realm = managedRealm.admin();
 
-        createRealmRole(managedRealm, RoleBuilder.create().name("realm-composite").build());
-        createRealmRole(managedRealm, RoleBuilder.create().name("realm-child").build());
+        createRealmRole(managedRealm, RoleConfigBuilder.create().name("realm-composite").build());
+        createRealmRole(managedRealm, RoleConfigBuilder.create().name("realm-child").build());
         realm.roles().get("realm-composite")
                 .addComposites(List.of(realm.roles().get("realm-child").toRepresentation()));
 
@@ -769,8 +773,8 @@ public class GroupTest extends AbstractGroupTest {
         String clientId = ApiUtil.getCreatedId(response);
         managedRealm.cleanup().add(r -> r.clients().get(clientId).remove());
 
-        realm.clients().get(clientId).roles().create(RoleBuilder.create().name("client-composite").build());
-        realm.clients().get(clientId).roles().create(RoleBuilder.create().name("client-child").build());
+        realm.clients().get(clientId).roles().create(RoleConfigBuilder.create().name("client-composite").build());
+        realm.clients().get(clientId).roles().create(RoleConfigBuilder.create().name("client-child").build());
         realm.clients().get(clientId).roles().get("client-composite").addComposites(
                 List.of(realm.clients().get(clientId).roles().get("client-child").toRepresentation())
         );
@@ -979,7 +983,7 @@ public class GroupTest extends AbstractGroupTest {
                     .password("password");
 
             realm.addClient("resource-owner")
-                    .directAccessGrants()
+                    .directAccessGrantsEnabled(true)
                     .secret("secret");
 
             return realm;

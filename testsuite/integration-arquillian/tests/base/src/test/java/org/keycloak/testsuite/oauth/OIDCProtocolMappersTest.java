@@ -17,10 +17,20 @@
 
 package org.keycloak.testsuite.oauth;
 
-import org.hamcrest.CoreMatchers;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.core.Response;
+
 import org.keycloak.admin.client.resource.ClientResource;
 import org.keycloak.admin.client.resource.ClientScopeResource;
 import org.keycloak.admin.client.resource.ProtocolMappersResource;
@@ -57,25 +67,29 @@ import org.keycloak.testsuite.updaters.ClientAttributeUpdater;
 import org.keycloak.testsuite.updaters.ProtocolMappersUpdater;
 import org.keycloak.testsuite.util.AdminClientUtil;
 import org.keycloak.testsuite.util.ClientManager;
-import org.keycloak.testsuite.util.oauth.AuthorizationEndpointResponse;
-import org.keycloak.testsuite.util.oauth.AccessTokenResponse;
 import org.keycloak.testsuite.util.ProtocolMapperUtil;
 import org.keycloak.testsuite.util.UserInfoClientUtil;
-
-import jakarta.ws.rs.client.Client;
-import jakarta.ws.rs.core.Response;
+import org.keycloak.testsuite.util.oauth.AccessTokenResponse;
+import org.keycloak.testsuite.util.oauth.AuthorizationEndpointResponse;
 import org.keycloak.testsuite.util.userprofile.UserProfileUtil;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import org.hamcrest.CoreMatchers;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+
+import static org.keycloak.OAuth2Constants.SCOPE_PROFILE;
+import static org.keycloak.testsuite.AbstractAdminTest.loadJson;
+import static org.keycloak.testsuite.admin.ApiUtil.findClientByClientId;
+import static org.keycloak.testsuite.admin.ApiUtil.findClientResourceByClientId;
+import static org.keycloak.testsuite.admin.ApiUtil.findUserByUsernameId;
+import static org.keycloak.testsuite.admin.ApiUtil.getCreatedId;
+import static org.keycloak.testsuite.util.ProtocolMapperUtil.createAddressMapper;
+import static org.keycloak.testsuite.util.ProtocolMapperUtil.createClaimMapper;
+import static org.keycloak.testsuite.util.ProtocolMapperUtil.createHardcodedClaim;
+import static org.keycloak.testsuite.util.ProtocolMapperUtil.createHardcodedRole;
+import static org.keycloak.testsuite.util.ProtocolMapperUtil.createRoleNameMapper;
+import static org.keycloak.testsuite.util.ProtocolMapperUtil.createScriptMapper;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.anyOf;
@@ -93,18 +107,6 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.keycloak.OAuth2Constants.SCOPE_PROFILE;
-import static org.keycloak.testsuite.admin.AbstractAdminTest.loadJson;
-import static org.keycloak.testsuite.admin.ApiUtil.findClientByClientId;
-import static org.keycloak.testsuite.admin.ApiUtil.findClientResourceByClientId;
-import static org.keycloak.testsuite.admin.ApiUtil.findUserByUsernameId;
-import static org.keycloak.testsuite.admin.ApiUtil.getCreatedId;
-import static org.keycloak.testsuite.util.ProtocolMapperUtil.createAddressMapper;
-import static org.keycloak.testsuite.util.ProtocolMapperUtil.createClaimMapper;
-import static org.keycloak.testsuite.util.ProtocolMapperUtil.createHardcodedClaim;
-import static org.keycloak.testsuite.util.ProtocolMapperUtil.createHardcodedRole;
-import static org.keycloak.testsuite.util.ProtocolMapperUtil.createRoleNameMapper;
-import static org.keycloak.testsuite.util.ProtocolMapperUtil.createScriptMapper;
 
 /**
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
@@ -1821,6 +1823,119 @@ public class OIDCProtocolMappersTest extends AbstractKeycloakTest {
         assertEquals("hardcoded-bar", accessToken.getOtherClaims().get("hardcoded-foo"));
     }
 
+    @Test
+    public void testStaticScopeUsingDynamicScopeFormatWithDedicatedMappers() {
+        RealmResource realm = adminClient.realm("test");
+        ClientResource clientResource = findClientResourceByClientId(realm, "test-app");
+        ClientRepresentation client = clientResource.toRepresentation();
+
+        // make sure the name of the client maps to the prefix of the dynamic scope name
+        client.setName("test");
+        clientResource.update(client);
+
+        String expectedScopeName = "test:create-mapper";
+        createClientScope(realm, clientResource, expectedScopeName, "from-mapper", "value", false);
+
+        // creates a dedicated mapper to the client
+        ProtocolMappersResource dedicatedClientMappers = clientResource.getProtocolMappers();
+        dedicatedClientMappers.createMapper(createHardCodedMapper("from-dedicated-mapper", "from-dedicated-mapper", "value")).close();
+
+        // request the test:create-mapper scope so that mappers are included
+        oauth.scope("openid " + expectedScopeName);
+        AccessTokenResponse response = oauth.doPasswordGrantRequest("test-user@localhost", "password");
+        assertTrue(response.getScope().contains(expectedScopeName));
+
+        IDToken idToken = oauth.verifyIDToken(response.getIdToken());
+        assertNotNull(idToken.getOtherClaims());
+        assertNotNull(idToken.getOtherClaims().get("from-mapper"));
+        // claim mapped by client scope mapper
+        assertEquals("value", idToken.getOtherClaims().get("from-mapper"));
+        assertNotNull(idToken.getOtherClaims().get("from-dedicated-mapper"));
+        // claim mapped by dedicated client mapper
+        assertEquals("value", idToken.getOtherClaims().get("from-dedicated-mapper"));
+
+        AccessToken accessToken = oauth.verifyToken(response.getAccessToken());
+        assertTrue(accessToken.getScope().contains(expectedScopeName));
+        assertNotNull(accessToken.getOtherClaims());
+        assertNotNull(accessToken.getOtherClaims().get("from-mapper"));
+        // claim mapped by client scope mapper
+        assertEquals("value", accessToken.getOtherClaims().get("from-mapper"));
+        assertNotNull(accessToken.getOtherClaims().get("from-dedicated-mapper"));
+        // claim mapped by dedicated client mapper
+        assertEquals("value", accessToken.getOtherClaims().get("from-dedicated-mapper"));
+    }
+
+    @Test
+    public void testStaticScopeUsingDynamicScopeFormatPrefixedWithScopeAsDefaultScope() {
+        RealmResource realm = adminClient.realm("test");
+        ClientResource clientResource = findClientResourceByClientId(realm, "test-app");
+        ClientRepresentation client = clientResource.toRepresentation();
+
+        // make sure the name of the client maps to the prefix of the dynamic scope name
+        client.setName("test");
+        clientResource.update(client);
+
+        // creates a client scope using the dynamic scope format and add it to the client as default scope
+        createClientScope(realm, clientResource, "test", "from-scope-mapper", "value", true);
+        createClientScope(realm, clientResource, "test:create", "from-dynamic-scope", "value", true);
+
+        oauth.scope("openid test:create");
+        AccessTokenResponse response = oauth.doPasswordGrantRequest("test-user@localhost", "password");
+        assertTrue(response.getScope().contains("test:create"));
+
+        AccessToken accessToken = oauth.verifyToken(response.getAccessToken());
+        assertTrue(accessToken.getScope().contains("test:create"));
+        assertNotNull(accessToken.getOtherClaims());
+        assertNotNull(accessToken.getOtherClaims().get("from-dynamic-scope"));
+        assertEquals("value", accessToken.getOtherClaims().get("from-dynamic-scope"));
+        assertNotNull(accessToken.getOtherClaims().get("from-scope-mapper"));
+        assertEquals("value", accessToken.getOtherClaims().get("from-scope-mapper"));
+    }
+
+    @Test
+    public void testStaticScopeUsingDynamicScopeFormatPrefixedWithScopeAsOptionalScope() {
+        RealmResource realm = adminClient.realm("test");
+        ClientResource clientResource = findClientResourceByClientId(realm, "test-app");
+        ClientRepresentation client = clientResource.toRepresentation();
+
+        // make sure the name of the client maps to the prefix of the dynamic scope name
+        client.setName("test");
+        clientResource.update(client);
+
+        // creates a client scope using the dynamic scope format and add it to the client as optional scope
+        createClientScope(realm, clientResource, "test", "from-scope-mapper", "value", false);
+        createClientScope(realm, clientResource, "test:create", "from-dynamic-scope", "value", false);
+
+        oauth.scope("openid test:create");
+        AccessTokenResponse response = oauth.doPasswordGrantRequest("test-user@localhost", "password");
+        assertTrue(response.getScope().contains("test:create"));
+
+        AccessToken accessToken = oauth.verifyToken(response.getAccessToken());
+        assertTrue(accessToken.getScope().contains("test:create"));
+        assertNotNull(accessToken.getOtherClaims());
+        assertNotNull(accessToken.getOtherClaims().get("from-dynamic-scope"));
+        // claim mapped by client scope mapper
+        assertEquals("value", accessToken.getOtherClaims().get("from-dynamic-scope"));
+    }
+
+    private void createClientScope(RealmResource realm, ClientResource clientResource, String name, String claim, String value, boolean isDefault) {
+        ClientScopeRepresentation scopeRep = new ClientScopeRepresentation();
+        scopeRep.setName(name);
+        scopeRep.setProtocol("openid-connect");
+        scopeRep.setProtocolMappers(Collections.singletonList(createHardCodedMapper(name + "from-scope-mapper", claim, value)));
+        try (Response resp1 = realm.clientScopes().create(scopeRep)) {
+            assertEquals(201, resp1.getStatus());
+            String clientScopeId = ApiUtil.getCreatedId(resp1);
+            getCleanup().addClientScopeId(clientScopeId);
+
+            if (isDefault) {
+                clientResource.addDefaultClientScope(clientScopeId);
+            } else {
+                clientResource.addOptionalClientScope(clientScopeId);
+            }
+        }
+    }
+
     private void assertRoles(List<String> actualRoleList, String ...expectedRoles){
         Assert.assertNames(actualRoleList, expectedRoles);
     }
@@ -1838,4 +1953,7 @@ public class OIDCProtocolMappersTest extends AbstractKeycloakTest {
         return oauth.doAccessTokenRequest(authzEndpointResponse.getCode());
     }
 
+    public ProtocolMapperRepresentation createHardCodedMapper(String name, String claim, String value) {
+        return createHardcodedClaim(name, claim, value, "String", true, true, true);
+    }
 }

@@ -18,24 +18,28 @@
 
 package org.keycloak.tests.admin.client;
 
+import java.util.Map;
+import java.util.Optional;
+
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.keycloak.constants.Oid4VciConstants;
+
+import org.keycloak.common.Profile;
+import org.keycloak.constants.OID4VCIConstants;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
 import org.keycloak.representations.idm.ClientScopeRepresentation;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
-import org.keycloak.testframework.server.DefaultServerConfigWithOid4Vci;
+import org.keycloak.testframework.server.KeycloakServerConfig;
+import org.keycloak.testframework.server.KeycloakServerConfigBuilder;
 
-import java.util.Map;
-import java.util.Optional;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 
 /**
  * @author Pascal Knüppel
  */
-@KeycloakIntegrationTest(config = DefaultServerConfigWithOid4Vci.class)
+@KeycloakIntegrationTest(config = ClientScopeTestOid4Vci.DefaultServerConfigWithOid4Vci.class)
 public class ClientScopeTestOid4Vci extends AbstractClientScopeTest {
 
     @DisplayName("Verify default values are correctly set")
@@ -44,7 +48,7 @@ public class ClientScopeTestOid4Vci extends AbstractClientScopeTest {
         ClientScopeRepresentation clientScope = new ClientScopeRepresentation();
         clientScope.setName("test-client-scope");
         clientScope.setDescription("test-client-scope-description");
-        clientScope.setProtocol(Oid4VciConstants.OID4VC_PROTOCOL);
+        clientScope.setProtocol(OID4VCIConstants.OID4VC_PROTOCOL);
         clientScope.setAttributes(Map.of("test-attribute", "test-value"));
 
         String clientScopeId = null;
@@ -89,6 +93,14 @@ public class ClientScopeTestOid4Vci extends AbstractClientScopeTest {
             Assertions.assertNotNull(clientScopeId);
             // cleanup
             clientScopes().get(clientScopeId).remove();
+        }
+    }
+
+    public static class DefaultServerConfigWithOid4Vci implements KeycloakServerConfig {
+
+        @Override
+        public KeycloakServerConfigBuilder configure(KeycloakServerConfigBuilder config) {
+            return config.features(Profile.Feature.OID4VC_VCI);
         }
     }
 }

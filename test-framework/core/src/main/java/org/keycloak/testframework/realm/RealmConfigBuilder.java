@@ -1,19 +1,21 @@
 package org.keycloak.testframework.realm;
 
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.keycloak.representations.idm.ClientPoliciesRepresentation;
+import org.keycloak.representations.idm.ClientPolicyRepresentation;
+import org.keycloak.representations.idm.ClientProfileRepresentation;
+import org.keycloak.representations.idm.ClientProfilesRepresentation;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.GroupRepresentation;
 import org.keycloak.representations.idm.IdentityProviderRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
+import org.keycloak.representations.idm.RoleRepresentation;
 import org.keycloak.representations.idm.RolesRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
-
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 public class RealmConfigBuilder {
 
@@ -43,31 +45,47 @@ public class RealmConfigBuilder {
         return this;
     }
 
+    public RealmConfigBuilder client(ClientRepresentation client) {
+        rep.setClients(Collections.combine(rep.getClients(), client));
+        return this;
+    }
+
     public ClientConfigBuilder addClient(String clientId) {
-        if (rep.getClients() == null) {
-            rep.setClients(new LinkedList<>());
-        }
         ClientRepresentation client = new ClientRepresentation();
-        rep.getClients().add(client);
+        rep.setClients(Collections.combine(rep.getClients(), client));
         return ClientConfigBuilder.update(client).enabled(true).clientId(clientId);
     }
 
     public UserConfigBuilder addUser(String username) {
-        if (rep.getUsers() == null) {
-            rep.setUsers(new LinkedList<>());
-        }
         UserRepresentation user = new UserRepresentation();
-        rep.getUsers().add(user);
+        rep.setUsers(Collections.combine(rep.getUsers(), user));
         return UserConfigBuilder.update(user).enabled(true).username(username);
     }
 
     public GroupConfigBuilder addGroup(String name) {
-        if (rep.getGroups() == null) {
-            rep.setGroups(new LinkedList<>());
-        }
         GroupRepresentation group = new GroupRepresentation();
-        rep.getGroups().add(group);
+        rep.setGroups(Collections.combine(rep.getGroups(), group));
         return GroupConfigBuilder.update(group).name(name);
+    }
+
+    public RoleConfigBuilder addRole(String name) {
+        if (rep.getRoles() == null) {
+            rep.setRoles(new RolesRepresentation());
+        }
+
+        RoleRepresentation role = new RoleRepresentation();
+        rep.getRoles().setRealm(Collections.combine(rep.getRoles().getRealm(), role));
+        return RoleConfigBuilder.update(role).name(name);
+    }
+
+    public RoleConfigBuilder addClientRole(String clientName, String roleName) {
+        if (rep.getRoles() == null) {
+            rep.setRoles(new RolesRepresentation());
+        }
+
+        RoleRepresentation role = new RoleRepresentation();
+        rep.getRoles().setClient(Collections.combine(rep.getRoles().getClient(), clientName, role));
+        return RoleConfigBuilder.update(role).name(roleName);
     }
 
     public RealmConfigBuilder registrationEmailAsUsername(boolean registrationEmailAsUsername) {
@@ -75,8 +93,8 @@ public class RealmConfigBuilder {
         return this;
     }
 
-    public RealmConfigBuilder editUsernameAllowed(boolean editUsernameAllowed) {
-        rep.setEditUsernameAllowed(editUsernameAllowed);
+    public RealmConfigBuilder editUsernameAllowed(boolean allowed) {
+        rep.setEditUsernameAllowed(allowed);
         return this;
     }
 
@@ -106,23 +124,17 @@ public class RealmConfigBuilder {
     }
 
     public RealmConfigBuilder enabledEventTypes(String... enabledEventTypes) {
-        if (rep.getEnabledEventTypes() == null) {
-            rep.setEnabledEventTypes(new LinkedList<>());
-        }
-        rep.getEnabledEventTypes().addAll(List.of(enabledEventTypes));
+        rep.setEnabledEventTypes(Collections.combine(rep.getEnabledEventTypes(), enabledEventTypes));
         return this;
     }
 
-    public RealmConfigBuilder overwriteEnabledEventTypes(String... enabledEventTypes) {
+    public RealmConfigBuilder setEnabledEventTypes(String... enabledEventTypes) {
         rep.setEnabledEventTypes(List.of(enabledEventTypes));
         return this;
     }
 
     public RealmConfigBuilder eventsListeners(String... eventListeners) {
-        if (rep.getEventsListeners() == null) {
-            rep.setEventsListeners(new LinkedList<>());
-        }
-        rep.getEventsListeners().addAll(List.of(eventListeners));
+        rep.setEventsListeners(Collections.combine(rep.getEventsListeners(), eventListeners));
         return this;
     }
 
@@ -175,10 +187,7 @@ public class RealmConfigBuilder {
     }
 
     public RealmConfigBuilder supportedLocales(String... supportedLocales) {
-        if (rep.getSupportedLocales() == null) {
-            rep.setSupportedLocales(new HashSet<>());
-        }
-        rep.getSupportedLocales().addAll(Set.of(supportedLocales));
+        rep.setSupportedLocales(Collections.combine(rep.getSupportedLocales(), supportedLocales));
         return this;
     }
 
@@ -196,8 +205,8 @@ public class RealmConfigBuilder {
         return this;
     }
 
-    public RealmConfigBuilder organizationsEnabled(boolean organizationsEnabled) {
-        rep.setOrganizationsEnabled(organizationsEnabled);
+    public RealmConfigBuilder organizationsEnabled(boolean enabled) {
+        rep.setOrganizationsEnabled(enabled);
         return this;
     }
 
@@ -211,8 +220,8 @@ public class RealmConfigBuilder {
         return this;
     }
 
-    public RealmConfigBuilder duplicateEmailsAllowed(boolean duplicateEmailsAllowed) {
-        rep.setDuplicateEmailsAllowed(duplicateEmailsAllowed);
+    public RealmConfigBuilder duplicateEmailsAllowed(boolean allowed) {
+        rep.setDuplicateEmailsAllowed(allowed);
         return this;
     }
 
@@ -223,6 +232,38 @@ public class RealmConfigBuilder {
 
     public RealmConfigBuilder identityProvider(IdentityProviderRepresentation identityProvider) {
         rep.addIdentityProvider(identityProvider);
+        return this;
+    }
+
+    public RealmConfigBuilder setRememberMe(boolean enabled) {
+        rep.setRememberMe(enabled);
+        return this;
+    }
+
+    public RealmConfigBuilder resetPasswordAllowed(boolean allowed) {
+        rep.setResetPasswordAllowed(allowed);
+        return this;
+    }
+
+    public RealmConfigBuilder clientPolicy(ClientPolicyRepresentation clienPolicyRep) {
+        ClientPoliciesRepresentation clientPolicies = rep.getParsedClientPolicies();
+        if (clientPolicies == null) {
+            clientPolicies = new ClientPoliciesRepresentation();
+        }
+        List<ClientPolicyRepresentation> policies = clientPolicies.getPolicies();
+        policies.add(clienPolicyRep);
+        rep.setParsedClientPolicies(clientPolicies);
+        return this;
+    }
+
+    public RealmConfigBuilder clientProfile(ClientProfileRepresentation clienProfileRep) {
+        ClientProfilesRepresentation clientProfiles = rep.getParsedClientProfiles();
+        if (clientProfiles == null) {
+            clientProfiles = new ClientProfilesRepresentation();
+        }
+        List<ClientProfileRepresentation> profiles = clientProfiles.getProfiles();
+        profiles.add(clienProfileRep);
+        rep.setParsedClientProfiles(clientProfiles);
         return this;
     }
 

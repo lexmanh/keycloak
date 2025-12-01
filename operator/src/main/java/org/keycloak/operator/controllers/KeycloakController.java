@@ -16,12 +16,15 @@
  */
 package org.keycloak.operator.controllers;
 
+import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.ContainerState;
 import io.fabric8.kubernetes.api.model.ContainerStateWaiting;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.PodSpec;
 import io.fabric8.kubernetes.api.model.PodStatus;
+import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.apps.StatefulSet;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.readiness.Readiness;
 import io.fabric8.kubernetes.client.utils.KubernetesResourceUtil;
 import io.fabric8.kubernetes.client.utils.Serialization;
@@ -62,7 +65,11 @@ import java.util.concurrent.TimeUnit;
         @Dependent(type = KeycloakIngressDependentResource.class, reconcilePrecondition = KeycloakIngressDependentResource.EnabledCondition.class),
         @Dependent(type = KeycloakServiceDependentResource.class),
         @Dependent(type = KeycloakDiscoveryServiceDependentResource.class),
-        @Dependent(type = KeycloakNetworkPolicyDependentResource.class, reconcilePrecondition = KeycloakNetworkPolicyDependentResource.EnabledCondition.class)
+        @Dependent(type = KeycloakNetworkPolicyDependentResource.class, reconcilePrecondition = KeycloakNetworkPolicyDependentResource.EnabledCondition.class),
+        @Dependent(
+              type = KeycloakServiceMonitorDependentResource.class,
+              activationCondition = KeycloakServiceMonitorDependentResource.ActivationCondition.class
+        ),
     })
 public class KeycloakController implements Reconciler<Keycloak> {
 
@@ -82,6 +89,8 @@ public class KeycloakController implements Reconciler<Keycloak> {
 
     @Inject
     KeycloakUpdateJobDependentResource updateJobDependentResource;
+
+    KeycloakDeploymentDependentResource keycloakDeploymentDependentResource = new KeycloakDeploymentDependentResource();
 
     @Override
     public List<EventSource<?, Keycloak>> prepareEventSources(EventSourceContext<Keycloak> context) {
@@ -132,7 +141,7 @@ public class KeycloakController implements Reconciler<Keycloak> {
         ContextUtils.storeWatchedResources(context, watchedResources);
         ContextUtils.storeDistConfigurator(context, distConfigurator);
         ContextUtils.storeCurrentStatefulSet(context, existingDeployment);
-        ContextUtils.storeDesiredStatefulSet(context, new KeycloakDeploymentDependentResource().desired(kc, context));
+        ContextUtils.storeDesiredStatefulSet(context, keycloakDeploymentDependentResource.initialDesired(kc, context));
 
         var updateLogic = updateLogicFactory.create(kc, context);
         var updateLogicControl = updateLogic.decideUpdate();
@@ -222,7 +231,16 @@ public class KeycloakController implements Reconciler<Keycloak> {
             status.addRollingUpdateMessage("Rolling out deployment update");
         }
 
+        watchedResources.getMissing(existingDeployment, ConfigMap.class)
+                .ifPresent(m -> status.addWarningMessage("The following ConfigMaps are missing: " + m));
+        watchedResources.getMissing(existingDeployment, Secret.class)
+                .ifPresent(m -> status.addWarningMessage("The following Secrets are missing: " + m));
+
         distConfigurator.validateOptions(keycloakCR, status);
+
+        context.managedWorkflowAndDependentResourceContext()
+                .get(KeycloakServiceMonitorDependentResource.SERVICE_MONITOR_WARNING, String.class)
+                .ifPresent(status::addWarningMessage);
     }
 
     public static boolean isRolling(StatefulSet existingDeployment) {
@@ -284,6 +302,14 @@ public class KeycloakController implements Reconciler<Keycloak> {
                                 if (Optional.ofNullable(cs.getState()).map(ContainerState::getWaiting)
                                         .map(ContainerStateWaiting::getReason).map(String::toLowerCase)
                                         .filter(s -> s.contains("err") || s.equals("crashloopbackoff")).isPresent()) {
+                                    // since we've failed, try to get the previous first, then the current
+                                    String log = null;
+                                    try {
+                                        log = context.getClient().raw(String.format("/api/v1/namespaces/%s/pods/%s/log?previous=true&tailLines=200", p.getMetadata().getNamespace(), p.getMetadata().getName()));
+                                    } catch (KubernetesClientException e) {
+                                        // just ignore
+                                    }
+
                                     Log.infof("Found unhealthy container on pod %s/%s: %s",
                                             p.getMetadata().getNamespace(), p.getMetadata().getName(),
                                             Serialization.asYaml(cs));
@@ -291,6 +317,14 @@ public class KeycloakController implements Reconciler<Keycloak> {
                                             String.format("Waiting for %s/%s due to %s: %s", p.getMetadata().getNamespace(),
                                                     p.getMetadata().getName(), cs.getState().getWaiting().getReason(),
                                                     cs.getState().getWaiting().getMessage()));
+                                    if (log != null) {
+                                        if (log.length() > 2000) {
+                                            log = "... " + log.substring(log.length() - 2000, log.length());
+                                        }
+                                        status.addErrorMessage(
+                                                String.format("Log for %s/%s: %s", p.getMetadata().getNamespace(),
+                                                        p.getMetadata().getName(), log));
+                                    }
                                 }
                             });
                 });

@@ -10,6 +10,12 @@ spec:
       value: value1
     - name: features
       value: docker
+    - name: tracing-header-Authorization
+      secret:
+        name: tracing-secret
+        key: token
+    - name: tracing-header-X-Org-Id
+      value: my-org-id
   db:
     vendor: vendor
     usernameSecret:
@@ -135,8 +141,18 @@ spec:
   update:
     strategy: Auto
     revision: 1
+    scheduling: {}
+  scheduling:
+    priorityClassName: x
+  env:
+    - name : MY_ENV_VAR
+      value: my-value
   unsupported:
     podTemplate:
       metadata:
         labels:
           my-label: "foo"
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s

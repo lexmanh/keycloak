@@ -1,9 +1,15 @@
 package org.keycloak.tests.admin.user;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import jakarta.ws.rs.core.Response;
-import org.apache.commons.lang3.RandomStringUtils;
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+
 import org.keycloak.admin.client.resource.UserProfileResource;
 import org.keycloak.models.UserModel;
 import org.keycloak.representations.idm.ClientRepresentation;
@@ -13,17 +19,13 @@ import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.representations.userprofile.config.UPConfig;
 import org.keycloak.testframework.annotations.KeycloakIntegrationTest;
 import org.keycloak.testframework.realm.UserConfigBuilder;
-import org.keycloak.tests.utils.admin.ApiUtil;
+import org.keycloak.testframework.util.ApiUtil;
 import org.keycloak.userprofile.DefaultAttributes;
 import org.keycloak.userprofile.validator.UsernameProhibitedCharactersValidator;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.stream.Collectors;
+import org.apache.commons.lang3.RandomStringUtils;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -167,7 +169,7 @@ public class UserSearchTest extends AbstractUserTest {
 
         UserRepresentation userRep = UserConfigBuilder.create()
                 .username("user1").password("password").name("user1FirstName", "user1LastName")
-                .email("user1@example.com").emailVerified().attribute("attr", longValue).build();
+                .email("user1@example.com").emailVerified(true).attribute("attr", longValue).build();
         String userId = createUser(userRep);
 
         UserRepresentation user1 = managedRealm.admin().users().get(userId).toRepresentation();
@@ -177,7 +179,7 @@ public class UserSearchTest extends AbstractUserTest {
 
         UserRepresentation userRep2 = UserConfigBuilder.create()
                 .username("user2").password("password").name("user2FirstName", "user2LastName")
-                .email("user2@example.com").emailVerified().attribute("attr", longValue + "a").build();
+                .email("user2@example.com").emailVerified(true).attribute("attr", longValue + "a").build();
 
         Response response =  managedRealm.admin().users().create(userRep2);
         assertThat(response.getStatus(), equalTo(400));
@@ -192,15 +194,15 @@ public class UserSearchTest extends AbstractUserTest {
 
         UserRepresentation userRep = UserConfigBuilder.create()
                 .username("user1").password("password").name("user1FirstName", "user1LastName")
-                .email("user1@example.com").emailVerified()
+                .email("user1@example.com").emailVerified(true)
                 .attribute("test1", longValue, "v2").attribute("test2", "v2").build();
         UserRepresentation userRep2 = UserConfigBuilder.create()
                 .username("user2").password("password").name("user2FirstName", "user2LastName")
-                .email("user2@example.com").emailVerified()
+                .email("user2@example.com").emailVerified(true)
                 .attribute("test1", longValue, "v2").attribute("test2", longValue2).build();
         UserRepresentation userRep3 = UserConfigBuilder.create()
                 .username("user3").password("password").name("user3FirstName", "user3LastName")
-                .email("user3@example.com").emailVerified()
+                .email("user3@example.com").emailVerified(true)
                 .attribute("test2", longValue, "v3").attribute("test4", "v4").build();
 
         createUser(userRep);

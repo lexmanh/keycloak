@@ -17,19 +17,29 @@
 
 package org.keycloak.quarkus.runtime.configuration.mappers;
 
+import java.net.MalformedURLException;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import org.keycloak.common.Profile;
 import org.keycloak.config.TracingOptions;
 import org.keycloak.quarkus.runtime.cli.PropertyException;
 import org.keycloak.quarkus.runtime.configuration.Configuration;
 import org.keycloak.utils.StringUtil;
 
-import java.net.MalformedURLException;
-import java.net.URISyntaxException;
-import java.net.URL;
+import io.smallrye.config.ConfigSourceInterceptorContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.keycloak.config.TracingOptions.TRACING_COMPRESSION;
 import static org.keycloak.config.TracingOptions.TRACING_ENABLED;
 import static org.keycloak.config.TracingOptions.TRACING_ENDPOINT;
+import static org.keycloak.config.TracingOptions.TRACING_HEADER;
+import static org.keycloak.config.TracingOptions.TRACING_HEADERS;
 import static org.keycloak.config.TracingOptions.TRACING_INFINISPAN_ENABLED;
 import static org.keycloak.config.TracingOptions.TRACING_JDBC_ENABLED;
 import static org.keycloak.config.TracingOptions.TRACING_PROTOCOL;
@@ -37,17 +47,19 @@ import static org.keycloak.config.TracingOptions.TRACING_RESOURCE_ATTRIBUTES;
 import static org.keycloak.config.TracingOptions.TRACING_SAMPLER_RATIO;
 import static org.keycloak.config.TracingOptions.TRACING_SAMPLER_TYPE;
 import static org.keycloak.config.TracingOptions.TRACING_SERVICE_NAME;
+import static org.keycloak.config.WildcardOptionsUtil.getWildcardPrefix;
+import static org.keycloak.config.WildcardOptionsUtil.getWildcardValue;
+import static org.keycloak.quarkus.runtime.configuration.MicroProfileConfigProvider.NS_KEYCLOAK_PREFIX;
 import static org.keycloak.quarkus.runtime.configuration.mappers.PropertyMapper.fromOption;
 
-public class TracingPropertyMappers {
+public class TracingPropertyMappers implements PropertyMapperGrouping {
     private static final String OTEL_FEATURE_ENABLED_MSG = "'opentelemetry' feature is enabled";
     private static final String TRACING_ENABLED_MSG = "Tracing is enabled";
+    private static final Logger log = LoggerFactory.getLogger(TracingPropertyMappers.class);
 
-    private TracingPropertyMappers() {
-    }
-
-    public static PropertyMapper<?>[] getMappers() {
-        return new PropertyMapper[]{
+    @Override
+    public List<PropertyMapper<?>> getPropertyMappers() {
+        return List.of(
                 fromOption(TRACING_ENABLED)
                         .isEnabled(TracingPropertyMappers::isFeatureEnabled, OTEL_FEATURE_ENABLED_MSG)
                         .to("quarkus.otel.enabled") // enable/disable whole OTel, tracing is enabled by default
@@ -98,8 +110,19 @@ public class TracingPropertyMappers {
                         .mapFrom(TracingOptions.TRACING_ENABLED)
                         .to("kc.spi-cache-embedded--default--tracing-enabled")
                         .isEnabled(TracingPropertyMappers::isTracingAndEmbeddedInfinispanEnabled, "tracing and embedded Infinispan is enabled")
+                        .build(),
+                fromOption(TRACING_HEADERS)
+                        .isEnabled(TracingPropertyMappers::isTracingEnabled, TRACING_ENABLED_MSG)
+                        .to("quarkus.otel.exporter.otlp.traces.headers")
+                        .transformer(TracingPropertyMappers::transformTracingHeaders)
+                        .isMasked(true) // it may contain sensitive information
+                        .build(),
+                fromOption(TRACING_HEADER)
+                        .isEnabled(TracingPropertyMappers::isTracingEnabled, TRACING_ENABLED_MSG)
+                        .paramLabel("<value>")
+                        .isMasked(true) // it may contain sensitive information
                         .build()
-        };
+        );
     }
 
     private static void validateEndpoint(String value) {
@@ -126,6 +149,28 @@ public class TracingPropertyMappers {
         } catch (NumberFormatException e) {
             throw new PropertyException("Ratio in 'tracing-sampler-ratio' option must be a double value in interval [0,1].");
         }
+    }
+
+    private static String transformTracingHeaders(String value, ConfigSourceInterceptorContext ctx) {
+        if (StringUtil.isNotBlank(value)) {
+            log.debug("HTTP headers for the tracing exporter are overridden by the '%s' parent property".formatted(TRACING_HEADERS.getKey()));
+            return value;
+        }
+
+        Map<String, String> headers = new HashMap<>();
+        String prefix = getWildcardPrefix(TRACING_HEADER.getKey());
+
+        Configuration.getPropertyNames().forEach(key -> {
+            if (key.startsWith(NS_KEYCLOAK_PREFIX) && key.startsWith(NS_KEYCLOAK_PREFIX + prefix)) {
+                String header = getWildcardValue(TRACING_HEADER, key);
+                String headerValue = Configuration.getOptionalValue(key)
+                        .orElseThrow(() -> new PropertyException("Wrong value for the property '%s'".formatted(key)));
+                headers.put(header, headerValue);
+            }
+        });
+        return headers.entrySet().stream()
+                .map(header -> header.getKey() + "=" + header.getValue())
+                .collect(Collectors.joining(","));
     }
 
     private static boolean isFeatureEnabled() {

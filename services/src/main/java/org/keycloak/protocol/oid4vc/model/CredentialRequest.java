@@ -17,18 +17,18 @@
 
 package org.keycloak.protocol.oid4vc.model;
 
+import java.util.Map;
+import java.util.Optional;
+
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
+import org.keycloak.models.oid4vci.CredentialScopeModel;
+import org.keycloak.util.JsonSerialization;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import org.keycloak.models.oid4vci.CredentialScopeModel;
-import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.RealmModel;
-import org.keycloak.util.JsonSerialization;
-
-import java.util.Map;
-import java.util.Optional;
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
 /**
  * Represents a CredentialRequest according to OID4VCI
@@ -37,6 +37,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
  * @author <a href="https://github.com/wistefan">Stefan Wiedemann</a>
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CredentialRequest {
 
     @JsonProperty("credential_configuration_id")
@@ -45,13 +46,16 @@ public class CredentialRequest {
     @JsonProperty("credential_identifier")
     private String credentialIdentifier;
 
+    @JsonProperty("proofs")
+    private Proofs proofs;
+
+    /**
+     * Deprecated: use {@link #proofs} instead.
+     * This field is kept only for backward compatibility with clients sending a single 'proof'.
+     */
+    @Deprecated
     @JsonProperty("proof")
-    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "proof_type")
-    @JsonSubTypes({
-            @JsonSubTypes.Type(value = JwtProof.class, name = ProofType.JWT),
-            @JsonSubTypes.Type(value = LdpVpProof.class, name = ProofType.LD_PROOF)
-    })
-    private Proof proof;
+    private JwtProof proof;
 
     // See: https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-format-identifier-3
     @JsonProperty("credential_definition")
@@ -59,8 +63,6 @@ public class CredentialRequest {
 
     @JsonProperty("credential_response_encryption")
     private CredentialResponseEncryption credentialResponseEncryption;
-
-    private String format;
 
     public String getCredentialIdentifier() {
         return credentialIdentifier;
@@ -80,11 +82,20 @@ public class CredentialRequest {
         return this;
     }
 
-    public Proof getProof() {
+    public Proofs getProofs() {
+        return proofs;
+    }
+
+    public CredentialRequest setProofs(Proofs proofs) {
+        this.proofs = proofs;
+        return this;
+    }
+
+    public JwtProof getProof() {
         return proof;
     }
 
-    public CredentialRequest setProof(Proof proof) {
+    public CredentialRequest setProof(JwtProof proof) {
         this.proof = proof;
         return this;
     }
@@ -104,15 +115,6 @@ public class CredentialRequest {
 
     public CredentialRequest setCredentialResponseEncryption(CredentialResponseEncryption credentialResponseEncryption) {
         this.credentialResponseEncryption = credentialResponseEncryption;
-        return this;
-    }
-
-    public String getFormat() {
-        return format;
-    }
-
-    public CredentialRequest setFormat(String format) {
-        this.format = format;
         return this;
     }
 

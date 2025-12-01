@@ -1,11 +1,11 @@
 package org.keycloak.testframework.realm;
 
-import org.keycloak.representations.idm.ClientRepresentation;
-import org.keycloak.representations.idm.ProtocolMapperRepresentation;
-
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+
+import org.keycloak.representations.idm.ClientRepresentation;
+import org.keycloak.representations.idm.ProtocolMapperRepresentation;
 
 public class ClientConfigBuilder {
 
@@ -96,13 +96,13 @@ public class ClientConfigBuilder {
         return this;
     }
 
-    public ClientConfigBuilder directAccessGrants() {
-        rep.setDirectAccessGrantsEnabled(true);
+    public ClientConfigBuilder directAccessGrantsEnabled(boolean enabled) {
+        rep.setDirectAccessGrantsEnabled(enabled);
         return this;
     }
 
-    public ClientConfigBuilder authorizationServices() {
-        rep.setAuthorizationServicesEnabled(true);
+    public ClientConfigBuilder authorizationServicesEnabled(boolean enabled) {
+        rep.setAuthorizationServicesEnabled(enabled);
         return this;
     }
 

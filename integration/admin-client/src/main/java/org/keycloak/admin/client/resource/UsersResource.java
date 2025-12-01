@@ -17,7 +17,7 @@
 
 package org.keycloak.admin.client.resource;
 
-import org.keycloak.representations.idm.UserRepresentation;
+import java.util.List;
 
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -29,7 +29,8 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import java.util.List;
+
+import org.keycloak.representations.idm.UserRepresentation;
 
 public interface UsersResource {
 
@@ -382,6 +383,8 @@ public interface UsersResource {
      * @param emailVerified emailVerified field of a user
      * @param username      username field of a user
      * @param enabled       Boolean representing if user is enabled or not
+     * @param idpAlias The alias of an Identity Provider linked to the user. Parameter supported since Keycloak server 26.4.0
+     * @param idpUserId The userId at an Identity Provider linked to the user. Parameter supported since Keycloak server 26.4.0
      * @return number of users matching the given filters
      */
     @Path("count")

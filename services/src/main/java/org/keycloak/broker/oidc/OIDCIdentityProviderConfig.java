@@ -16,23 +16,25 @@
  */
 package org.keycloak.broker.oidc;
 
-import static org.keycloak.common.util.UriUtils.checkUrl;
-
+import org.keycloak.broker.jwtauthorizationgrant.JWTAuthorizationGrantConfig;
 import org.keycloak.common.enums.SslRequired;
 import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.RealmModel;
 
+import static org.keycloak.common.util.UriUtils.checkUrl;
+
 /**
  * @author Pedro Igor
  */
-public class OIDCIdentityProviderConfig extends OAuth2IdentityProviderConfig {
+public class OIDCIdentityProviderConfig extends OAuth2IdentityProviderConfig implements JWTAuthorizationGrantConfig {
 
     public static final String JWKS_URL = "jwksUrl";
 
     public static final String USE_JWKS_URL = "useJwksUrl";
     public static final String VALIDATE_SIGNATURE = "validateSignature";
     public static final String IS_ACCESS_TOKEN_JWT = "isAccessTokenJWT";
-    public static final String ISSUER = "issuer";
+    public static final String SUPPORTS_CLIENT_ASSERTIONS = "supportsClientAssertions";
+    public static final String SUPPORTS_CLIENT_ASSERTION_REUSE = "supportsClientAssertionReuse";
 
     public OIDCIdentityProviderConfig(IdentityProviderModel identityProviderModel) {
         super(identityProviderModel);
@@ -180,11 +182,36 @@ public class OIDCIdentityProviderConfig extends OAuth2IdentityProviderConfig {
         }
     }
 
+    public boolean isSupportsClientAssertions() {
+        return Boolean.parseBoolean(getConfig().get(SUPPORTS_CLIENT_ASSERTIONS));
+    }
+
+    public void setSupportsClientAssertions(boolean supportsClientAssertions) {
+        getConfig().put(SUPPORTS_CLIENT_ASSERTIONS, String.valueOf(supportsClientAssertions));
+    }
+
+    public boolean isSupportsClientAssertionReuse() {
+        return Boolean.parseBoolean(getConfig().get(SUPPORTS_CLIENT_ASSERTION_REUSE));
+    }
+
     @Override
     public void validate(RealmModel realm) {
         super.validate(realm);
         SslRequired sslRequired = realm.getSslRequired();
         checkUrl(sslRequired, getJwksUrl(), "jwks_url");
         checkUrl(sslRequired, getLogoutUrl(), "logout_url");
+
+        if (isValidateSignature() || isJWTAuthorizationGrantEnabled() || isSupportsClientAssertions()) {
+            String optionText = isValidateSignature() ? "Validate signatures" :
+                    (isJWTAuthorizationGrantEnabled() ? "JWT Authorization Grant" : "Supports client assertions");
+
+            if (isUseJwksUrl()) {
+                if (getJwksUrl() == null) {
+                    throw new IllegalArgumentException(String.format("JWKS URL is required when '%s' enabled and 'Use JWKS URL' enabled", optionText));
+                }
+            } else if (getPublicKeySignatureVerifier() == null) {
+                throw new IllegalArgumentException(String.format("The 'Validating public key' is required when '%s' enabled and 'Use JWKS URL' disabled", optionText));
+            }
+        }
     }
 }
