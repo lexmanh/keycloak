@@ -34,7 +34,21 @@ function loggedInUserName(
   const preferredUsername = token.preferred_username;
 
   if (givenName && familyName) {
-    return t("fullName", { familyName, givenName }); // change fullName with familyName and givenName
+    // return t("fullName", { familyName, givenName }); // change fullName with familyName and givenName
+
+    // Display based on locale
+    const locale = navigator.language || navigator.languages[0] || "en-US";
+    const localeParts = locale.split("-");
+    const language = localeParts[0];
+
+    // For Vietnamese, family name comes first
+    if (language === "vi" || language === "ja" || language === "zh") {
+      // For Vietnamese, family name comes first
+      return t("fullName", { familyName, givenName });
+    } else {
+      // Default to given name first
+      return t("fullName", { givenName, familyName });
+    }
   }
 
   return givenName || familyName || preferredUsername || t("unknownUser");
