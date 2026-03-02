@@ -28,6 +28,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +47,7 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
 
+import org.keycloak.OID4VCConstants.KeyAttestationResistanceLevels;
 import org.keycloak.TokenVerifier;
 import org.keycloak.admin.client.resource.ClientResource;
 import org.keycloak.admin.client.resource.RealmResource;
@@ -68,6 +70,7 @@ import org.keycloak.models.ClientScopeModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.UserSessionModel;
 import org.keycloak.models.oid4vci.CredentialScopeModel;
+import org.keycloak.protocol.oid4vc.issuance.JWTVCIssuerWellKnownProviderFactory;
 import org.keycloak.protocol.oid4vc.issuance.OID4VCAuthorizationDetailsResponse;
 import org.keycloak.protocol.oid4vc.issuance.OID4VCIssuerEndpoint;
 import org.keycloak.protocol.oid4vc.issuance.TimeProvider;
@@ -212,26 +215,29 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
 
         // Register the optional client scopes
         sdJwtTypeCredentialClientScope = registerOptionalClientScope(sdJwtTypeCredentialScopeName,
-                null,
-                sdJwtTypeCredentialConfigurationIdName,
-                sdJwtTypeCredentialScopeName,
-                sdJwtCredentialVct,
-                Format.SD_JWT_VC,
-                null);
+                                                                     null,
+                                                                     sdJwtTypeCredentialConfigurationIdName,
+                                                                     sdJwtTypeCredentialScopeName,
+                                                                     sdJwtCredentialVct,
+                                                                     Format.SD_JWT_VC,
+                                                                     null,
+                                                                     List.of(KeyAttestationResistanceLevels.HIGH,
+                                                                             KeyAttestationResistanceLevels.MODERATE));
         jwtTypeCredentialClientScope = registerOptionalClientScope(jwtTypeCredentialScopeName,
-                TEST_DID.toString(),
-                jwtTypeCredentialConfigurationIdName,
-                jwtTypeCredentialScopeName,
-                null,
-                Format.JWT_VC,
-                TEST_CREDENTIAL_MAPPERS_FILE);
+                                                                   TEST_DID.toString(),
+                                                                   jwtTypeCredentialConfigurationIdName,
+                                                                   jwtTypeCredentialScopeName,
+                                                                   null,
+                                                                   Format.JWT_VC,
+                                                                   TEST_CREDENTIAL_MAPPERS_FILE,
+                                                                   Collections.emptyList());
         minimalJwtTypeCredentialClientScope = registerOptionalClientScope("vc-with-minimal-config",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+                                                                          null,
+                                                                          null,
+                                                                          null,
+                                                                          null,
+                                                                          null,
+                                                                          null, null);
 
         List.of(client, namedClient).forEach(client -> {
             String clientId = client.getClientId();
@@ -267,7 +273,8 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
                                                                   String credentialIdentifier,
                                                                   String vct,
                                                                   String format,
-                                                                  String protocolMapperReferenceFile) {
+                                                                  String protocolMapperReferenceFile,
+                                                                  List<String> acceptedKeyAttestationValues) {
         // Check if the client scope already exists
         List<ClientScopeRepresentation> existingScopes = testRealm().clientScopes().findAll();
         for (ClientScopeRepresentation existingScope : existingScopes) {
@@ -304,6 +311,15 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
                 throw new RuntimeException(e);
             }
             addAttribute.accept(CredentialScopeModel.VC_DISPLAY, vcDisplay);
+        }
+        if (acceptedKeyAttestationValues != null) {
+            attributes.put(CredentialScopeModel.KEY_ATTESTATION_REQUIRED, "true");
+            if (!acceptedKeyAttestationValues.isEmpty()) {
+                attributes.put(CredentialScopeModel.KEY_ATTESTATION_REQUIRED_KEY_STORAGE,
+                               String.join(",", acceptedKeyAttestationValues));
+                attributes.put(CredentialScopeModel.KEY_ATTESTATION_REQUIRED_USER_AUTH,
+                               String.join(",", acceptedKeyAttestationValues));
+            }
         }
         clientScope.setAttributes(attributes);
 
@@ -546,6 +562,17 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
         return contextRoot + "/auth/.well-known/openid-credential-issuer/realms/" + realm;
     }
 
+    protected String getSpecCompliantRealmMetadataPath(String realm) {
+        var contextRoot = suiteContext.getAuthServerInfo().getContextRoot();
+        // [TODO] This should be contextRoot/.well-known/jwt-vc-issuer/auth/realms/...
+        return contextRoot + "/auth/.well-known/" + JWTVCIssuerWellKnownProviderFactory.PROVIDER_ID + "/realms/" + realm;
+    }
+
+    protected String getLegacyJwtVcRealmMetadataPath(String realm) {
+        var contextRoot = suiteContext.getAuthServerInfo().getContextRoot();
+        return contextRoot + "/auth/realms/" + realm + "/.well-known/" + JWTVCIssuerWellKnownProviderFactory.PROVIDER_ID;
+    }
+
     protected String getCredentialOfferUriUrl(String configId) {
         return getCredentialOfferUriUrl(configId, true, "john");
     }
@@ -554,14 +581,14 @@ public abstract class OID4VCIssuerEndpointTest extends OID4VCTest {
         return getCredentialOfferUriUrl(configId, preAuthorized, targetUser, null);
     }
 
-    protected String getCredentialOfferUriUrl(String configId, Boolean preAuthorized, String appUserId, String appClientId) {
+    protected String getCredentialOfferUriUrl(String configId, Boolean preAuthorized, String appUsername, String appClientId) {
         String res = getBasePath("test") + "credential-offer-uri?credential_configuration_id=" + configId;
         if (preAuthorized != null)
             res += "&pre_authorized=" + preAuthorized;
         if (appClientId != null)
             res += "&client_id=" + appClientId;
-        if (appUserId != null)
-            res += "&user_id=" + appUserId;
+        if (appUsername != null)
+            res += "&username=" + appUsername;
         return res;
     }
 

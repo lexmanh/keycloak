@@ -25,13 +25,14 @@ jobs:
 
       - name: Prepare archive for upload
         run: |
-          mv ./quarkus/dist/target/keycloak-999.0.0-SNAPSHOT.tar.gz ./keycloak-999.0.0-SNAPSHOT.tar.gz
+          ARCHIVE=$(ls ./quarkus/dist/target/keycloak-*.tar.gz | head -n 1)
+          cp "$ARCHIVE" ./keycloak-dist.tar.gz
 
       - name: Upload Keycloak dist
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: keycloak
-          path: keycloak-999.0.0-SNAPSHOT.tar.gz
+          path: keycloak-dist.tar.gz
 
   account-ui-e2e:
     name: Account UI E2E
@@ -62,8 +63,9 @@ jobs:
 
       - name: Start Keycloak server
         run: |
-          tar xfvz keycloak-999.0.0-SNAPSHOT.tar.gz
-          keycloak-999.0.0-SNAPSHOT/bin/kc.sh start-dev --features=transient-users,oid4vc-vci &> ~/server.log &
+          tar xfvz keycloak-dist.tar.gz
+          KC_DIR=$(tar tf keycloak-dist.tar.gz | head -n 1 | cut -d '/' -f1)
+          "$KC_DIR/bin/kc.sh" start-dev --features=transient-users,oid4vc-vci &> ~/server.log &
         env:
           KC_BOOTSTRAP_ADMIN_USERNAME: admin
           KC_BOOTSTRAP_ADMIN_PASSWORD: admin
@@ -121,8 +123,9 @@ jobs:
 
       - name: Start Keycloak server
         run: |
-          tar xfvz keycloak-999.0.0-SNAPSHOT.tar.gz
-          keycloak-999.0.0-SNAPSHOT/bin/kc.sh start-dev --features=admin-fine-grained-authz:v2,transient-users,spiffe,oid4vc-vci &> ~/server.log &
+          tar xfvz keycloak-dist.tar.gz
+          KC_DIR=$(tar tf keycloak-dist.tar.gz | head -n 1 | cut -d '/' -f1)
+          "$KC_DIR/bin/kc.sh" start-dev --features=admin-fine-grained-authz:v2,transient-users,spiffe,oid4vc-vci &> ~/server.log &
         env:
           KC_BOOTSTRAP_ADMIN_USERNAME: admin
           KC_BOOTSTRAP_ADMIN_PASSWORD: admin

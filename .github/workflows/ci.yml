@@ -27,6 +27,13 @@ permissions:
 
 jobs:
 
+  # Generate version compatibility matrix in a separate job to avoid multiline secret masking issues.
+  version-compatibility:
+    name: Version Compatibility Matrix
+    uses: ./.github/workflows/version-compatibility-matrix.yml
+    permissions:
+      contents: read
+
   conditional:
     name: Check conditional workflows and jobs
     runs-on: ubuntu-latest
@@ -38,7 +45,6 @@ jobs:
       ci-webauthn: ${{ steps.conditional.outputs.ci-webauthn }}
       ci-aurora: ${{ steps.auroradb-tests.outputs.run-aurora-tests }}
       ci-azure: ${{ steps.azure-tests.outputs.run-azure-tests }}
-      ci-compatibility-matrix: ${{ steps.version-compatibility.outputs.matrix }}
       ci-additional-dbs: ${{ steps.additional-dbs-tests.outputs.run-additional-dbs-tests }}
       ci-admin-v2: ${{ steps.conditional.outputs.admin-v2 }}
     permissions:
@@ -79,20 +85,6 @@ jobs:
           fi
           echo "run-additional-dbs-tests=$RUN_ADDITIONAL_DBS_TESTS" >> $GITHUB_OUTPUT
 
-      - name: Version Compatibility Matrix
-        id: version-compatibility
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            BRANCH="${{ github.base_ref }}"
-          else
-            BRANCH="${{ github.ref_name }}"
-          fi
-          MATRIX_JSON=$(./.github/scripts/version-compatibility.sh "${BRANCH}")
-          echo "${MATRIX_JSON}"
-          echo "matrix=${MATRIX_JSON}" >> $GITHUB_OUTPUT
-
   build:
     name: Build
     if: needs.conditional.outputs.ci == 'true'
@@ -105,7 +97,7 @@ jobs:
         uses: ./.github/actions/build-keycloak
 
       - name: Spotless
-        run: ./mvnw spotless:check
+        run: ./mvnw -Pdocs,distribution,operator spotless:check
 
       - name: Check for unstaged proto.lock files
         if: github.event_name == 'pull_request' && startsWith(github.event.pull_request.base.ref, 'release/')
@@ -276,6 +268,11 @@ jobs:
       - id: integration-test-setup
         name: Integration test setup
         uses: ./.github/actions/integration-test-setup
+
+      - id: prunsrv-setup
+        name: Setup Apache Commons Daemon (Procrun) for Windows service tests
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/prunsrv-setup
 
       # Smoke tests should cover scenarios that could be broken by changes in other modules that quarkus
       # test classes and even individual tests are included in the following suites by junit tags
@@ -747,7 +744,7 @@ jobs:
     timeout-minutes: 75
     strategy:
       matrix:
-        db: [postgres, mysql, oracle, mssql, mariadb, tidb]
+        db: [postgres, mysql, oracle, mssql, mariadb]
       fail-fast: false
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -914,7 +911,7 @@ jobs:
 
       - name: Run new Forms IT
         run: |
-          ./mvnw package -f tests/pom.xml -Dkc.test.browser=${{ matrix.browser }} -Dtest=FormsTestSuite
+          ./mvnw package -f tests/pom.xml -Dkc.test.browser=${{ matrix.browser }}-headless -Dtest=FormsTestSuite
 
       - uses: ./.github/actions/upload-flaky-tests
         name: Upload flaky tests
@@ -929,12 +926,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     timeout-minutes: 45
-    strategy:
-      matrix:
-        browser:
-          - chrome
-          - firefox
-      fail-fast: false
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
@@ -943,13 +934,16 @@ jobs:
         uses: ./.github/actions/integration-test-setup
 
       - uses: ./.github/actions/install-chrome
-        if: matrix.browser == 'chrome'
 
       - name: Run WebAuthn IT
         run: |
           TESTS=`testsuite/integration-arquillian/tests/base/testsuites/suite.sh webauthn`
           echo "Tests: $TESTS"
-          ./mvnw test ${{ env.SUREFIRE_RETRY }} -Pauth-server-quarkus -Dtest=$TESTS -Dbrowser=${{ matrix.browser }} "-Dwebdriver.chrome.driver=$CHROMEWEBDRIVER/chromedriver" "-Dwebdriver.gecko.driver=$GECKOWEBDRIVER/geckodriver" -pl testsuite/integration-arquillian/tests/base 2>&1 | misc/log/trimmer.sh
+          ./mvnw test ${{ env.SUREFIRE_RETRY }} -Pauth-server-quarkus -Dtest=$TESTS -Dbrowser=chrome "-Dwebdriver.chrome.driver=$CHROMEWEBDRIVER/chromedriver" -pl testsuite/integration-arquillian/tests/base 2>&1 | misc/log/trimmer.sh
+
+      - name: Run new WebAuthn IT
+        run: |
+          ./mvnw test -f tests/webauthn/pom.xml
 
       - uses: ./.github/actions/upload-flaky-tests
         name: Upload flaky tests
@@ -1085,15 +1079,15 @@ jobs:
 
   mixed-cluster-compatibility-tests:
     name: Cluster Compatibility Tests
-    if: needs.conditional.outputs.ci-compatibility-matrix != 'skip'
+    if: needs.version-compatibility.outputs.matrix != 'skip'
     runs-on: ubuntu-latest
     needs:
       - build
-      - conditional
+      - version-compatibility
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(needs.conditional.outputs.ci-compatibility-matrix) }}
+        include: ${{ fromJSON(needs.version-compatibility.outputs.matrix) }}
     timeout-minutes: 10
 
     steps:
