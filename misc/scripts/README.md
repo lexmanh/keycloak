@@ -35,3 +35,20 @@ kcw nightly start --hostname=mykeycloak
 ```
 
 For more details run `kcw help`.
+
+## sync-upstream-main.sh
+
+Creates a sync branch by merging `upstream/main` into a target branch (default: `uef`) and pushes the sync branch to `origin`.
+
+Examples:
+
+```
+bash misc/scripts/sync-upstream-main.sh
+bash misc/scripts/sync-upstream-main.sh uef
+OPEN_PR=1 bash misc/scripts/sync-upstream-main.sh uef
+```
+
+Notes:
+
+- The script auto-adds `upstream` remote if missing (pointing to `https://github.com/keycloak/keycloak.git`).
+- When `OPEN_PR=1` and `gh` CLI is available, it creates a PR automatically.

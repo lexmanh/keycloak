@@ -1,0 +1,44 @@
+name: Upstream sync
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      base_branch:
+        description: Branch to receive upstream changes
+        required: false
+        default: uef
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event_name != 'schedule' || github.repository == 'lexmanh/keycloak'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync upstream and create PR
+        env:
+          BASE_BRANCH: ${{ github.event.inputs.base_branch }}
+          OPEN_PR: '1'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          base_branch="${BASE_BRANCH:-uef}"
+          bash misc/scripts/sync-upstream-main.sh "$base_branch"
