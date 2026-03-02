@@ -77,6 +77,10 @@ public class JWTAuthorizationGrantType extends OAuth2GrantTypeBase {
             }
             event.detail(Details.IDENTITY_PROVIDER, identityProviderModel.getAlias());
 
+            if (!identityProviderModel.isEnabled()) {
+                throw new RuntimeException("Identity Provider is not enabled");
+            }
+
             if(!OIDCAdvancedConfigWrapper.fromClientModel(context.getClient()).getJWTAuthorizationGrantAllowedIdentityProviders().contains(identityProviderModel.getAlias())) {
                 throw new RuntimeException("Identity Provider is not allowed for the client");
             }
@@ -107,6 +111,12 @@ public class JWTAuthorizationGrantType extends OAuth2GrantTypeBase {
             if (user == null) {
                 throw new RuntimeException("User not found");
             }
+            if (!user.isEnabled()) {
+                throw new RuntimeException("User is not enabled");
+            }
+            if (user.getRequiredActionsStream().findAny().isPresent()) {
+                throw new RuntimeException("Account is not fully set up");
+            }
             event.user(user);
             event.detail(Details.USERNAME, user.getUsername());
 
@@ -129,7 +139,13 @@ public class JWTAuthorizationGrantType extends OAuth2GrantTypeBase {
             event.session(userSession);
             ClientSessionContext clientSessionCtx = TokenManager.attachAuthenticationSession(this.session, userSession,
                     authSession, authorizationGrantContext.getRestrictedScopes(), false);
-            return createTokenResponse(user, userSession, clientSessionCtx, scopeParam, true, null);
+            TokenManager.AccessTokenResponseBuilder responseBuilder = createTokenResponseBuilder(user, userSession, clientSessionCtx, scopeParam, null);
+            if (jwtAuthorizationGrantProvider.isLimitAccessTokenExpiration()) {
+                if (authorizationGrantContext.getJWT().getExp() < responseBuilder.getAccessToken().getExp()) {
+                    responseBuilder.getAccessToken().exp(authorizationGrantContext.getJWT().getExp());
+                }
+            }
+            return createTokenResponse(responseBuilder, clientSessionCtx, true);
         } catch (CorsErrorResponseException e) {
             throw e;
         } catch (Exception e) {
