@@ -52,3 +52,29 @@ Notes:
 
 - The script auto-adds `upstream` remote if missing (pointing to `https://github.com/keycloak/keycloak.git`).
 - When `OPEN_PR=1` and `gh` CLI is available, it creates a PR automatically.
+
+## smoke-webauthn.sh
+
+Runs a quick end-to-end WebAuthn required-action smoke test against a local dev container.
+
+Examples:
+
+```
+bash misc/scripts/smoke-webauthn.sh
+HOST_PORT=19080 bash misc/scripts/smoke-webauthn.sh
+KEEP_CONTAINER=1 bash misc/scripts/smoke-webauthn.sh
+```
+
+It validates:
+
+- Required-action page renders (`login-webauthn-register`).
+- No FreeMarker/template 500 related to `webauthn-register.ftl` in logs.
+
+## UEF-OPS-RUNBOOK.md
+
+Operational runbook for recurring tasks:
+
+- Upstream sync strategy (manual + workflow).
+- Conflict-handling flow.
+- WebAuthn smoke-test process.
+- Release checklist and pitfalls.
